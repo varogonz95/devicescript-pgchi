@@ -1,0 +1,38 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/devicescript-esp32/main/boards/esp32deviceconfig.schema.json",
+    "devName": "ESP-WROOM32 DevKit USB Type C",
+    "productId": "0x32b9cc96",
+    "$description": "Custom board based on ESP32 DevKitc board",
+    "archId": "esp32",
+    "url": "https://docs.espressif.com/projects/esp-idf/en/latest/esp32/hw-reference/esp32/get-started-devkitc.html",
+    "$services": [
+        {
+            "name": "buttonIO0",
+            "pin": 0,
+            "service": "button"
+        }
+    ],
+    "led": {
+        "pin": 2,
+        "isMono": true
+    },
+    "pins": {
+        "P13": 13,
+        "P14": 14,
+        "P18": 18,
+        "P19": 19,
+        "P21": 21,
+        "P22": 22,
+        "P23": 23,
+        "P25": 25,
+        "P26": 26,
+        "P27": 27,
+        "P32": 32,
+        "P33": 33,
+        "P34": 34,
+        "P35": 35,
+        "P4": 4,
+        "VN": 39,
+        "VP": 36
+    }
+}
