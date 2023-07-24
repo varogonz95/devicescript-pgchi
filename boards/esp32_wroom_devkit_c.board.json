@@ -12,11 +12,8 @@
             "service": "button"
         }
     ],
-    "led": {
-        "pin": 2,
-        "isMono": true
-    },
     "pins": {
+        "LED": 2,
         "P13": 13,
         "P14": 14,
         "P18": 18,
