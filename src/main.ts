@@ -1,8 +1,14 @@
-import { Socket } from "@devicescript/net";
 import { map, throttleTime } from "@devicescript/observables";
-import { startLightLevel, startSoilMoisture } from "@devicescript/servers";
+import { configureHardware, startLightLevel, startSoilMoisture } from "@devicescript/servers";
 import { readSetting } from "@devicescript/settings";
-import { pins } from "@dsboard/esp32_wroom_devkit_c";
+import { pins, board } from "@dsboard/esp32_wroom_devkit_c";
+
+configureHardware({
+    i2c:{
+        pinSDA: pins.P21,
+        pinSCL: pins.P22
+    }
+})
 
 const SECONDS = 1000
 const soilMin = await readSetting<number>("soilMin", 0)
@@ -47,19 +53,3 @@ const lightLevelSub = lightLevel.reading
     .subscribe(async data => {
         console.data({ soil: { ...data } })
     })
-
-/* const ssd = new SSD1306Driver({
-    width: 128,
-    height: 64,
-    devAddr: 0x3d
-})
-
-const screen = await startCharacterScreen(ssd)
-await screen.message.write(
-`°( )° 
-( O ) 
-°( )° 
-  |   
-  |/  
-  |   
-~~~~~ `) */
