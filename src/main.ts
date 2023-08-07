@@ -1,10 +1,18 @@
-import { map, throttleTime } from "@devicescript/observables";
+import { SSD1306Driver, startCharacterScreen } from "@devicescript/drivers";
+import { Observable, collect, interval, map } from "@devicescript/observables";
 import { configureHardware, startLightLevel, startSoilMoisture } from "@devicescript/servers";
 import { readSetting } from "@devicescript/settings";
 import { pins, board } from "@dsboard/esp32_wroom_devkit_c";
 
+interface SensorReading {
+    value: number,
+    percent: number,
+}
+
+type SensorRecord<T extends Record<string, Observable<unknown>>> = Record<keyof T, SensorReading>
+
 configureHardware({
-    i2c:{
+    i2c: {
         pinSDA: pins.P21,
         pinSCL: pins.P22
     }
@@ -26,30 +34,39 @@ const lightLevel = startLightLevel({
     pin: pins.P33
 })
 
-const soilMoistureSub = soilMoisture.reading
+const $soil = soilMoisture.reading
     .pipe(
-        throttleTime(3 * SECONDS),
-        map((value) => ({
-            min: soilMin,
-            max: soilMax,
-            current: value,
+        map((value) => <SensorReading>{
+            value,
             percent: Math.map(value, soilMin, soilMax, 0, 100)
-        }))
+        })
     )
-    .subscribe(async data => {
-        console.data({ light: { ...data } })
-    })
 
-const lightLevelSub = lightLevel.reading
+const $light = lightLevel.reading
     .pipe(
-        throttleTime(3 * SECONDS),
-        map((value) => ({
-            min: lightMin,
-            max: lightMax,
-            current: value,
+        map((value) => <SensorReading>{
+            value,
             percent: Math.map(value, lightMin, lightMax, 0, 100)
-        }))
+        })
     )
-    .subscribe(async data => {
-        console.data({ soil: { ...data } })
-    })
+
+const sensorObservablesRecord = { light: $light, soil: $soil, }
+
+const sensorObservables = collect(
+    sensorObservablesRecord,
+    interval(3 * SECONDS),
+    { clearValuesOnEmit: true }
+)
+.pipe(map(observables => <SensorRecord<typeof sensorObservablesRecord>>observables))
+
+const ssdDisplay = new SSD1306Driver({ height: 64, width: 128 })
+
+try {
+    const characterScreen = await startCharacterScreen(ssdDisplay)
+    await characterScreen.message.write(
+`
+`)
+} catch (error) {
+    console.warn(`${SSD1306Driver.constructor.name} is not available:`, error)
+}
+
