@@ -1,0 +1,80 @@
+{
+    "peripherals": [
+        {
+            "name": "real time clock",
+            "client": "RealTimeClock",
+            "startAt": {
+                "year": 2000,
+                "month": 1,
+                "date": 1,
+                "weekDay": 4,
+                // ...
+            }
+        },
+        {
+            "name": "soil moisture",
+            "client": "soilMoisture",
+            "min": 123,
+            "max": 123
+        }
+    ],
+    "rules": [
+        {
+            "name": "soil moisture rule",
+            "conditions": [
+                {
+                    "when": [
+                        "soil moisture | percent",
+                        "<=",
+                        "15"
+                    ],
+                    "and": [
+                        "soil moisture",
+                        "<=",
+                        "1000"
+                    ],
+                    "andGroup": {
+                        "when": [
+                            "soil moisture | percent",
+                            "<=",
+                            "15"
+                        ],
+                        "or": [
+                            "soil moisture | percent",
+                            "<=",
+                            "15"
+                        ]
+                    },
+                    "then": [
+                        {
+                            "peripheral": "water pump relay",
+                            "enable": true
+                        },
+                        {
+                            "service": "NotificationService",
+                            "push": {
+                                "title": "Soil moisture alert!",
+                                "message": "Plant is dry!",
+                                "actions": [
+                                    "Dismiss",
+                                    {
+                                        "call": "activateWaterPump",
+                                        "args": [60]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                // or...
+                {
+                    "when": [
+                        "soil moisture | percent",
+                        "=",
+                        "$(soil moisture).min"
+                    ]
+                }
+            ]
+        }
+    ]
+}
