@@ -1,6 +1,7 @@
 import { Response, Socket, connect, fetch } from "@devicescript/net";
 import { readSetting } from "@devicescript/settings";
 import { SignInWithCustomTokenResponse, SignInWithPasswordResponse } from "./firebase/responses";
+import { ConfigKey } from "../enums";
 
 interface AuthHeader {
     ["x-api-key"]: string
@@ -21,8 +22,8 @@ export class FirebaseHttpClient {
     }
 
     public async register(token: string | Buffer) {
-        this.projectId = await readSetting("FB_PROJID")
-        this.apiKey = await readSetting("FB_APIKEY")
+        this.projectId = await readSetting(ConfigKey.FirestoreProjectId)
+        this.apiKey = await readSetting(ConfigKey.FirestoreApiKey)
 
         // const { idToken } = await this.signInWithToken(token)
         // this.authHeaders = {
@@ -33,14 +34,14 @@ export class FirebaseHttpClient {
     public async createDocument<T>(collectionId: string, data: T): Promise<Response> {
         // POST /v1/{parent=projects/*/databases/*/documents/**}/{collectionId}
         const url = `${this.baseUrl}/v1/projects/${this.projectId}/databases/${this.databaseId}/documents/${collectionId}`
-        const options = {
-            method: "POST",
-            body: "{}",
-            headers: { "Content-Type": "application/json", key: this.apiKey }
-        }
-        console.log("POST: ", url)
-        console.log("REQUEST OPTIONS: ", options)
-        return await fetch(url, options)
+const options = {
+    method: "POST",
+    body: "{}",
+    headers: { "Content-Type": "application/json", key: this.apiKey }
+}
+console.log("POST: ", url)
+console.log("REQUEST OPTIONS: ", options)
+return await fetch(url, options)
     }
 
     public async signInWithToken(token: string | Buffer): Promise<SignInWithCustomTokenResponse> {
