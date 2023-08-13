@@ -1,24 +1,26 @@
-import { IConfiguration } from "./interfaces/configuration";
+import { readSetting } from "@devicescript/settings";
+import { ConfigKeyMap } from "./enums";
+import { Map } from "./utils";
 
-export class ConfigurationBuilder {
-    public static async build<T = any>(): Promise<Configuration<T>> {
-        throw new Error("Method not implemented.");
+export type ConfigObject = {
+    [key in keyof typeof ConfigKeyMap]?: string;
+};
+
+export class Configuration {
+    private static configObj: ConfigObject
+
+    public static async hydrate(): Promise<ConfigObject> {
+        let config: Map<string, string> = {}
+        for (const key in ConfigKeyMap) {
+            config[key] = await readSetting<string>(ConfigKeyMap[key])
+        }
+        this.configObj = config
+        return this.configObj
     }
 
-    public static async buildFromFile<T = any>(file: string): Promise<Configuration<T>> {
-        throw new Error("Method not implemented.");
+    public static get(key: keyof typeof ConfigKeyMap): string {
+        if (this.configObj)
+            return this.configObj[key]
+        throw new Error('Configuration is not hydrated')
     }
-}
-
-export class Configuration<T> implements IConfiguration {
-    private configObj: T
-
-    async get<T = any>(section: string, defaultValue?: T): Promise<T> {
-        throw new Error("Method not implemented.");
-    }
-
-    async set<T = any>(section: string, value: T): Promise<void> {
-        throw new Error("Method not implemented.");
-    }
-
 }

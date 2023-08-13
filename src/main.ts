@@ -1,23 +1,21 @@
-import { SSD1306Driver, startCharacterScreen } from "@devicescript/drivers";
 import { Observable, collect, interval, map } from "@devicescript/observables";
 import { configureHardware, startLightLevel, startSoilMoisture } from "@devicescript/servers";
 import { readSetting } from "@devicescript/settings";
-import { pins, board } from "@dsboard/esp32_wroom_devkit_c";
-import { SensorReading } from "./interfaces/sensor-reading";
-import { fetch } from "@devicescript/net";
-import { FirebaseHttpClient } from "./http/firebase-http-client";
-import { encrypt, ivSize, randomBuffer } from "@devicescript/crypto";
-import { ConfigKey } from "./enums";
+import { pins } from "@dsboard/esp32_wroom_devkit_c";
+import { ConfigKeyMap } from "./enums";
 import { AzureDbCosmosClient } from "./http/azure-db-cosmos/azure-db-cosmos";
+import { SensorReading } from "./interfaces/sensor-reading";
+import { SyncedClockService } from "./services/synced-clock";
+import { Configuration } from "./configuration";
+import { TimeApiClient } from "./http/time-api/time-api";
 import { RealTimeClock } from "@devicescript/core";
-import { toDateString } from "./utils";
 
 type SensorRecord<T extends Record<string, Observable<unknown>>> = Record<keyof T, SensorReading>
 
 // this secret is stored in the .env.local and uploaded to the device settings
-const adafruitUser = await readSetting(ConfigKey.AdaUsername)
-const adafruitKey = await readSetting(ConfigKey.AdaKey)
-const feed = "pgotchi-data"
+// const adafruitUser = await readSetting(ConfigKeyMap.AdaUsername)
+// const adafruitKey = await readSetting(ConfigKeyMap.AdaKey)
+// const feed = "pgotchi-data"
 
 // // this is currently the only algorithm supported
 // const algo = "aes-256-ccm"
@@ -40,8 +38,8 @@ const feed = "pgotchi-data"
 // console.log("encrypted: ", encrypted)
 
 // Adafruit IO API https://io.adafruit.com/api/docs/#create-data
-const url = `https://io.adafruit.com/api/v2/${adafruitUser}/feeds/${feed}/data`
-const headers = { "X-AIO-Key": adafruitKey, "Content-Type": "application/json" }
+// const url = `https://io.adafruit.com/api/v2/${adafruitUser}/feeds/${feed}/data`
+// const headers = { "X-AIO-Key": adafruitKey, "Content-Type": "application/json" }
 
 configureHardware({
     i2c: {
@@ -51,10 +49,7 @@ configureHardware({
 })
 
 const SECONDS = 1000
-const soilMin = await readSetting<number>(ConfigKey.SoilMin, 0)
-const soilMax = await readSetting<number>(ConfigKey.SoilMax, 1)
-const lightMin = await readSetting<number>(ConfigKey.LightMin, 0)
-const lightMax = await readSetting<number>(ConfigKey.LightMax, 1)
+const {SoilMin, SoilMax, LightMin, LightMax, Timezone, AzureUri} = await Configuration.hydrate()
 
 const soilMoisture = startSoilMoisture({
     name: "Soil Moisture",
@@ -66,63 +61,43 @@ const lightLevel = startLightLevel({
     pin: pins.P33
 })
 
-const $soil = soilMoisture.reading
-    .pipe(
-        map((value) => <SensorReading>{
-            value,
-            percent: Math.map(value, soilMin, soilMax, 0, 100)
-        })
-    )
+// const $soil = soilMoisture.reading
+//     .pipe(
+//         map((value) => <SensorReading>{
+//             value,
+//             percent: Math.map(value, SoilMin, soilMax, 0, 100)
+//         })
+//     )
 
-const $light = lightLevel.reading
-    .pipe(
-        map((value) => <SensorReading>{
-            value,
-            percent: Math.map(value, lightMin, lightMax, 0, 100)
-        })
-    )
+// const $light = lightLevel.reading
+//     .pipe(
+//         map((value) => <SensorReading>{
+//             value,
+//             percent: Math.map(value, lightMin, lightMax, 0, 100)
+//         })
+//     )
 
-const realTimeclock = new RealTimeClock()
-const clockParts = await realTimeclock.reading.read()
-const date = toDateString(clockParts)
+const rtc = new RealTimeClock()
+console.log("Date before request: ", await rtc.reading.read());
 
-const azureKey = await readSetting<string>(ConfigKey.AzureCosmosPrimaryKey)
-const azureCosmosClient = new AzureDbCosmosClient()
-const authSignature = azureCosmosClient.getMasterKeyAuthSignature({
-    date,
-    key: azureKey,
-    keyType: "master",
-    resourceType: "colls",
-    resourceLink: "https://{databaseaccount}.documents.azure.com/dbs/{db-id}/colls",
-    verb: "GET"
-})
+const timeApiClient = new TimeApiClient()
+const clockService = new SyncedClockService(rtc, timeApiClient)
+await clockService.sync(Timezone)
 
-// const firebaseClient = new FirebaseHttpClient()
-// await firebaseClient.register(/* encrypted */"")
-// const signInResponse = await firebaseClient.signInWithPassword("varogonz95@gmail.com", "CorsairK63W")
-// console.log(signInResponse)
-// const response = await firebaseClient.createDocument("sensors", {})
-// console.log(response)
-const sensorObservablesRecord = { light: $light, soil: $soil, }
-const sensorObservables = collect(
-    sensorObservablesRecord,
-    interval(10 * SECONDS),
-    { clearValuesOnEmit: true }
-)
-    .pipe(map(observables => <SensorRecord<typeof sensorObservablesRecord>>observables))
-    .subscribe(async observer => {
-        const { light, soil } = observer
+const azureCosmosClient = new AzureDbCosmosClient(AzureUri, clockService)
+const response = await azureCosmosClient.getCollections("pgotchi")
+console.log(await response.text())
 
-        // const { status } = await fetch(url, {
-        //     method: "POST",
-        //     headers,
-        //     body: JSON.stringify({ value: soil.value }),
-        // })
-
-        // const response = await firebaseClient.createDocument("cities", {soil, light})
-
-        // console.log(await response.text())
-    })
+// const sensorObservablesRecord = { light: $light, soil: $soil, }
+// const sensorObservables = collect(
+//     sensorObservablesRecord,
+//     interval(10 * SECONDS),
+//     { clearValuesOnEmit: true }
+// )
+//     .pipe(map(observables => <SensorRecord<typeof sensorObservablesRecord>>observables))
+//     .subscribe(async observer => {
+//         // Do something...
+//     })
 
 // const ssdDisplay = new SSD1306Driver({ height: 64, width: 128 })
 
