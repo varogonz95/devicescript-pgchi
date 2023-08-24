@@ -20,5 +20,5 @@
     "include": [
         "**/*.ts",
         "../node_modules/@devicescript/core/src/*.ts"
-    ]
+, "screen.tsx"    ]
 }

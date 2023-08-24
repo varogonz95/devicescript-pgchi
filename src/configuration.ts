@@ -1,6 +1,7 @@
 import { readSetting } from "@devicescript/settings";
 import { ConfigKeyMap } from "./enums";
 import { Map } from "./utils";
+import { assert } from "@devicescript/core";
 
 export type ConfigObject = {
     [key in keyof typeof ConfigKeyMap]?: string;
@@ -19,8 +20,7 @@ export class Configuration {
     }
 
     public static get(key: keyof typeof ConfigKeyMap): string {
-        if (this.configObj)
-            return this.configObj[key]
-        throw new Error('Configuration is not hydrated')
+        assert(!!this.configObj, 'Configuration is not hydrated')
+        return this.configObj[key]
     }
 }

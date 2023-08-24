@@ -5,6 +5,7 @@ import { IClock } from "../../interfaces/clock";
 import { DateFormat } from "../../interfaces/date";
 import { toDateBuffer } from "../../utils";
 import { HttpMethod, defaultHeaders } from "../http";
+import { encodeURIComponent } from "@devicescript/runtime";
 
 export type ResourceType = "dbs" | "colls" | "sprocs" | "udfs" | "triggers" | "users" | "permissions" | "docs"
 export type AzureKeyType = "master" | "resource" | "aad"
@@ -26,26 +27,30 @@ export class AzureDbCosmosClient {
 
     public async register(): Promise<void> { }
 
-    public async getMasterKeyAuthSignature(builder: SignatureBuilder): Promise<Buffer> {
+    public async getMasterKeyAuthSignature(builder: SignatureBuilder): Promise<string> {
         const key = Configuration.get("AzureCosmosPrimaryKey");
 
         const { date, verb, resourceLink, resourceType } = builder
-        const payload = Buffer.from(`${verb}\n${resourceType}\n${resourceLink}\n${date}\n\n`, "hex")
-        const hash = digest("sha256", Buffer.from(key, "hex"))
-        const signature = hmac(hash, "sha256", payload).toString("hex")
-        const authSet = Buffer.from(`type=master&ver=${this.tokenVersion}&sig=${signature}`)
+        console.log(date, verb, resourceLink, resourceType)
+        const body = `${verb.toLowerCase()}\n${resourceType}\n${resourceLink}\n${date.toLowerCase()}\n\n`
+        // const hash = digest("sha256", Buffer.from(key))
 
+        const sha256Body = encodeURIComponent(body)
+        const signature = hmac(key, "sha256", sha256Body).toString("hex")
+        const authSet = encodeURIComponent(`type=master&ver=${this.tokenVersion}&sig=${signature}`);
+        
         console.log("Request Date: ", date);
-        console.log("AZ Cosmos DB Auth Key signature: ", signature)
+        console.log("AZ Cosmos DB Auth body: ", sha256Body)
+        console.log("AZ Cosmos DB Auth signature: ", signature)
         console.log("AZ Cosmos DB Auth Set: ", authSet)
-
+        
         return authSet
     }
 
-    public async getCollections(dbId: string): Promise<Response> {
+    public async getDatabase(dbId: string): Promise<Response> {
         const date = await this.getRequestDate()
         const resourceType = "dbs"
-        const resourceLink = `${resourceType}/${dbId}/colls`
+        const resourceLink = `${resourceType}/${dbId}`
         const auth = await this.getMasterKeyAuthSignature({
             date,
             resourceType,
@@ -53,7 +58,7 @@ export class AzureDbCosmosClient {
             verb: HttpMethod.Get,
         })
 
-        const headers = this.getHeaders(auth.toString(), date)
+        const headers = this.getHeaders(auth, date)
         return await fetch(this.uri + resourceLink, {
             headers,
             method: HttpMethod.Get,

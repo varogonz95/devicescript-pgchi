@@ -1,6 +1,24 @@
 import { Map } from "./utils";
 
-export const ConfigKeyMap: Map<string, string> = {
+export type ConfigKey =
+    | "AppKey"
+    | "Timezone"
+    | "AdaUsername"
+    | "AdaKey"
+    | "FirestoreProjectId"
+    | "FirestoreApiKey"
+    | "AzureUri"
+    | "AzureDbAccount"
+    | "AzureCosmosPrimaryKey"
+    | "AzureCosmosSecondaryKey"
+    | "WifiSsid"
+    | "WifiPwd"
+    | "SoilMin"
+    | "SoilMax"
+    | "LightMin"
+    | "LightMax"
+
+export const ConfigKeyMap: Map<string | ConfigKey, string> = {
     AppKey: "APP_KEY",
     Timezone: "TIMEZONE",
 
