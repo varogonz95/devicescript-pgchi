@@ -1,3 +1,4 @@
+import { OperatorFunction, map } from "@devicescript/observables"
 import { DateFormat, DateParts, DayAbbrNamesIndexMap, DayAbbrNamesMap, MonthsIndex } from "./interfaces/date"
 
 export type Map<K extends string | number | symbol, T> = {
@@ -22,3 +23,4 @@ export const toDateBuffer = (dateParts: DateParts, timezone: string, format: Dat
             return Buffer.from(`${year}/${month}/${date} ${hours}:${mins}:${secs}`)
     }
 }
+

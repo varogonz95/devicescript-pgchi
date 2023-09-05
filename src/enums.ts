@@ -3,18 +3,26 @@ import { Map } from "./utils";
 export type ConfigKey =
     | "AppKey"
     | "Timezone"
+    
     | "AdaUsername"
     | "AdaKey"
+
     | "FirestoreProjectId"
     | "FirestoreApiKey"
+
     | "AzureUri"
     | "AzureDbAccount"
     | "AzureCosmosPrimaryKey"
     | "AzureCosmosSecondaryKey"
+
     | "WifiSsid"
     | "WifiPwd"
+
+    | "SoilPin"
     | "SoilMin"
     | "SoilMax"
+
+    | "LightPin"
     | "LightMin"
     | "LightMax"
 
@@ -36,9 +44,11 @@ export const ConfigKeyMap: Map<string | ConfigKey, string> = {
     WifiSsid: "WIFI_SSID",
     WifiPwd: "WIFI_PWD",
 
+    SoilPin: "SOIL_PIN",
     SoilMin: "SOIL_MIN",
     SoilMax: "SOIL_MAX",
 
+    LightPin: "LIGHT_PIN",
     LightMin: "LIGHT_MIN",
     LightMax: "LIGHT_MAX",
 }
