@@ -1,0 +1,52 @@
+{
+    "sensor_routines": [
+      {
+        "sensor_name": "LightSensor",
+        "sensor_type": "Analog",
+        "readings": {
+          "value": 0,
+          "unit": "Lux"
+        },
+        "thresholds": {
+          "min": 100,
+          "max": 1000
+        },
+        "action": {
+          "type": "Condition",
+          "condition": {
+            "type": "Range",
+            "min_value": 500,
+            "max_value": 800
+          },
+          "output": {
+            "type": "Analog",
+            "value": 255
+          }
+        }
+      },
+      {
+        "sensor_name": "MotionSensor",
+        "sensor_type": "Digital",
+        "readings": {
+          "value": false
+        },
+        "thresholds": {
+          "min": false,
+          "max": true
+        },
+        "action": {
+          "type": "Condition",
+          "condition": {
+            "type": "TimePeriod",
+            "start_time": "08:00:00",
+            "end_time": "20:00:00"
+          },
+          "output": {
+            "type": "Digital",
+            "value": true
+          }
+        }
+      }
+    ]
+  }
+  
