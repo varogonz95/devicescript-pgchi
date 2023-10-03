@@ -1,53 +1,48 @@
+import { Sensor } from "@devicescript/core";
+import { startLightLevel } from "@devicescript/servers";
+import { pins } from "@dsboard/esp32_devkit_c";
+import { DeviceConfig, GPIOPin, HardwareIdentifiers } from "./core";
 
-interface Config {
-  sensors: {
-    "sensorId": {
-      label: "servo motor"
-      pin: 2,
-      startingValue: 0, // available if mode = output
-      mode: "input" | "output" //...
-    }
-  },
-  routines: {
-    "sensorId": {
-      schedule: {
-        startAt: "2023-09-23 ....",
-        endAt: "2023-09-23 ....", // optional
-        // optional
-        repeats: true | "yearly" | "monthly" //...
-      },
-      condition: {
-        // sensor value
-        subject: "$this" | "sensorId",
-        // boolean expressions,
-        comparison: "greaterThan" | "equals" | "...",
-        value: 123
-        // value ranges,
-        between: [1, 2]
-        //...
-      },
-      action: {
-        pushNotification: {
-          title: "...",
-          message: ""
-        },
-        setValue: {
-          target: "$this" | "sensorId",
-          value: 123 | true | false,
-          duration: 1000, // optional 
-          durationUntil: "date..."
-        },
-        sendEmail: {
-          recipients: "...",
-          title: "...",
-          text: "...",
-          html: "..."
-        },
-        webhook: {
-          url: "...",
-          data: "..."
+const Seconds = 1000;
+
+const mockConfig: DeviceConfig = {
+    sensors: {
+        lightLevel: { pin: pins.P13, },
+        soilMoisture: { pin: pins.P14, },
+    },
+    routines: {
+        lightLevel: {
+            condition: {
+                subject: "$this",
+                comparison: "between",
+                value: [0, 25]
+            },
+            actions: {
+                setValue: {
+                    target: "relay_lamp",
+                    value: true,
+                    duration: 10 * Seconds
+                }
+            }
         }
-      }
     }
-  }
 }
+
+const serverFactory = (identifier: string, pin: GPIOPin): Sensor => {
+    const hardwareIdentifier = identifier as HardwareIdentifiers
+
+    if (hardwareIdentifier === "lightLevel") {
+        return startLightLevel({ pin: pin })
+    }
+
+    return null
+}
+
+const configure = (config: DeviceConfig) => {
+    for (const key in config.sensors) {
+        const server = serverFactory(key, config.sensors[key].pin)
+        console.log(server)
+    }
+}
+
+configure(mockConfig)
