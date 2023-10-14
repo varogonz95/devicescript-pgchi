@@ -25,7 +25,7 @@ export interface WebhookAction {
 
 export enum ActionTypes {
     PushNotification = "pushNotification",
-    SetValue = "setValue",
+    SetValue = "set",
     SendEmail = "sendEmail",
     Webhook = "webhook",
 }

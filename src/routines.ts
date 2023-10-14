@@ -1,23 +1,28 @@
 import { Actions } from "./actions"
 
-export type ComparisonTypes =
-    | "greaterThan"
-    | "greaterOrEqualsTo"
-    | "lessThan"
-    | "lessOrEqualsTo"
-    | "equals"
-    | "notEquals"
-    | "between"
-
-// export type ConditionValue = number | [number, number]
-
-export interface RoutineCondition {
-    // sensor value
-    subject: string // | WeatherService
-    // boolean expressions,
-    comparison: ComparisonTypes
-    value: number | [number, number]
+export enum ComparisonType {
+    GreaterThan = "greaterThan",
+    GreaterOrEqualsTo = "greaterOrEqualsTo",
+    LessThan = "lessThan",
+    LessOrEqualsTo = "lessOrEqualsTo",
+    Equals = "equals",
+    NotEquals = "notEquals",
+    Between = "between",
 }
+
+type NumberValueCondition = {
+    [k in Exclude<ComparisonType, ComparisonType.Between>]: number
+}
+
+type RangeCondition = {
+    [ComparisonType.Between]: [number, number]
+}
+
+export type ConditionType = NumberValueCondition | RangeCondition
+export type AllOfConditions = { allOf: ConditionType[] }
+export type AnyOfConditions = { anyOf: ConditionType[] }
+
+export type RoutineCondition = AllOfConditions | AnyOfConditions
 
 export type ScheduleFrequency =
     | "yearly"   // Valid when endAt - startAt <= 1 year
@@ -37,13 +42,11 @@ export interface Schedule {
     repeats?: ScheduleRepeatOptions
 }
 
-export interface ScheduledRoutine {
-    schedule: Schedule
+export interface Routine {
     condition: RoutineCondition
     actions: Partial<Actions>
 }
 
-export interface ConditionalRoutine {
-    condition: RoutineCondition
-    actions: Partial<Actions>
+export interface ScheduledRoutine extends Routine {
+    schedule: Schedule
 }

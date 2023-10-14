@@ -1,21 +1,21 @@
 import { BaseServiceConfig, LightLevelConfig, SoilMoistureConfig } from "@devicescript/servers"
-import { ConditionalRoutine, ScheduledRoutine } from "./routines"
-import { SensorType } from "./types"
+import { Routine, ScheduledRoutine } from "./routines"
+import { PeripheralType } from "./types"
 
-export interface ISensorConfig<T extends SensorType, C extends BaseServiceConfig> {
+export interface IPeripheralConfig<T extends PeripheralType, C extends BaseServiceConfig> {
     type: T
     config: C
 }
 
-export type SensorConfigTypes =
-    | ISensorConfig<SensorType.LightLevel, LightLevelConfig>
-    | ISensorConfig<SensorType.SoilMoisture, SoilMoistureConfig>
+export type PeripheralConfigTypes =
+    | IPeripheralConfig<PeripheralType.LightLevel, LightLevelConfig>
+    | IPeripheralConfig<PeripheralType.SoilMoisture, SoilMoistureConfig>
 
-export type SensorsConfig = Record<string, SensorConfigTypes>
-export type RoutineTypes = ScheduledRoutine | ConditionalRoutine
-export type RoutinesConfig = Record<string, RoutineTypes>
+export type Routines = ScheduledRoutine | Routine
+export type PeripheralsConfig = Record<string, PeripheralConfigTypes>
+export type RoutinesConfig = Record<string, Routines>
 
 export interface DeviceConfig {
-    sensors: SensorsConfig
+    peripherals: PeripheralsConfig
     routines?: RoutinesConfig
 }

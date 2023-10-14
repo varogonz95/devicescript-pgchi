@@ -1,4 +1,3 @@
-import { LightLevel, Sensor } from "@devicescript/core";
 
 export interface Thresholds {
     min: number | boolean;
@@ -42,3 +41,4 @@ export interface DeviceConfiguration {
     sensors: SensorConfig[]
     routines: Routine[];
 }
+
