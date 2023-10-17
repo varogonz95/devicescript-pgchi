@@ -3,7 +3,9 @@
         "moduleResolution": "node",
         "target": "es2022",
         "module": "es2022",
-        "lib": ["ES6"],
+        "lib": [
+            "ES6"
+        ],
         "strict": true,
         "strictNullChecks": false,
         "strictFunctionTypes": true,
@@ -19,6 +21,6 @@
     },
     "include": [
         "**/*.ts",
-        "../node_modules/@devicescript/core/src/*.ts"
+        "../node_modules/@devicescript/core/src/*.ts",
     ]
 }

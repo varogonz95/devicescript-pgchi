@@ -1,95 +1,130 @@
-import { SSD1306Driver, startCharacterScreen } from "@devicescript/drivers";
-import { Observable, collect, interval, map, throttleTime } from "@devicescript/observables";
-import { configureHardware, startLightLevel, startSoilMoisture } from "@devicescript/servers";
-import { readSetting } from "@devicescript/settings";
-import { pins, board } from "@dsboard/esp32_wroom_devkit_c";
-import { SensorReading } from "./interfaces/sensor-reading";
-import { fetch } from "@devicescript/net";
-import { FirebaseHttpClient } from "./http/firebase-http-client";
+import { Handler, delay } from "@devicescript/core";
+import { interval, map } from "@devicescript/observables";
+import { DeviceConfig } from "./config";
+import { Seconds } from "./constants";
+import { DevicePeripheralTypes, PeripheralAdapter, PeripheralAdapterFactory, PeripheralType } from "./peripherals";
+import { ConditionType, RoutineCondition, isAllOfCondition, isAnyOfCondition, isRangeConditionType, isScalarConditionType, isScheduledRoutine } from "./routines";
+import { Actions } from "./actions";
+import { DriverStore } from "./driver-store";
 
-type SensorRecord<T extends Record<string, Observable<unknown>>> = Record<keyof T, SensorReading>
-
-// this secret is stored in the .env.local and uploaded to the device settings
-const user = await readSetting("IO_USERNAME")
-const key = await readSetting("IO_KEY")
-const feed = "pgotchi-data"
-
-// Adafruit IO API https://io.adafruit.com/api/docs/#create-data
-const url = `https://io.adafruit.com/api/v2/${user}/feeds/${feed}/data`
-const headers = { "X-AIO-Key": key, "Content-Type": "application/json" }
-
-configureHardware({
-    i2c: {
-        pinSDA: pins.P21,
-        pinSCL: pins.P22
+const deviceConfig: DeviceConfig = {
+    peripherals: {
+        foo: { type: PeripheralType.LightLevel, invert: true },
+        bar: { type: PeripheralType.SoilMoisture },
+        baz: { type: PeripheralType.Relay },
+    },
+    routines: {
+        foo: {
+            conditions: {
+                allOf: [
+                    { between: [0, 0.15] },
+                ]
+            },
+            actions: {
+                setValue: {
+                    target: "baz",
+                    value: true,
+                    otherwise: false
+                }
+            }
+        }
     }
-})
+}
 
-const SECONDS = 1000
-const soilMin = await readSetting<number>("soilMin", 0)
-const soilMax = await readSetting<number>("soilMax", 1)
-const lightMin = await readSetting<number>("lightMin", 0)
-const lightMax = await readSetting<number>("lightMax", 1)
 
-const soilMoisture = startSoilMoisture({
-    name: "Soil Moisture",
-    pin: pins.P32
-})
+const { peripherals, routines } = deviceConfig
 
-const lightLevel = startLightLevel({
-    name: "Light Level",
-    pin: pins.P33
-})
+type PeripheralAdapters = Record<string, PeripheralAdapter<DevicePeripheralTypes>>
+let adapters: PeripheralAdapters = {}
 
-const $soil = soilMoisture.reading
-    .pipe(
-        map((value) => <SensorReading>{
-            value,
-            percent: Math.map(value, soilMin, soilMax, 0, 100)
-        })
-    )
+// Initialize sensor servers respectively
+for (const pKey in peripherals) {
+    const config = peripherals[pKey]
+    adapters[pKey] = PeripheralAdapterFactory.create(config, routines[pKey])
+}
 
-const $light = lightLevel.reading
-    .pipe(
-        map((value) => <SensorReading>{
-            value,
-            percent: Math.map(value, lightMin, lightMax, 0, 100)
-        })
-    )
+DriverStore.createInstance(adapters)
 
-const sensorObservablesRecord = { light: $light, soil: $soil, }
+function conditionsMet(conditions: RoutineCondition, value: any) {
+    if (isAllOfCondition(conditions)) {
+        return allOfConditionsMet(conditions.allOf, value);
+    }
 
-const firebaseClient = new FirebaseHttpClient()
-await firebaseClient.register()
+    if (isAnyOfCondition(conditions)) {
+        return anyOfConditionsMet(conditions.anyOf, value);
+    }
 
-const sensorObservables = collect(
-    sensorObservablesRecord,
-    interval(30 * SECONDS),
-    { clearValuesOnEmit: true }
-)
-    .pipe(map(observables => <SensorRecord<typeof sensorObservablesRecord>>observables))
-    .subscribe(async observer => {
-        const { light, soil } = observer
+    return false;
+}
 
-        // const { status } = await fetch(url, {
-        //     method: "POST",
-        //     headers,
-        //     body: JSON.stringify({ value: soil.value }),
-        // })
+function evaluateConditions(conditions: ConditionType[], value: any) {
+    const assertions: boolean[] = []
 
-        const response = await firebaseClient.createDocument("test", {soil, light})
+    for (const condition of conditions) {
+        if (isScalarConditionType(condition)) {
+            if (condition.equals) {
+                assertions.push(value === condition.equals)
+            }
+            else if (condition.greaterOrEqualsTo) {
+                assertions.push(value >= condition.greaterOrEqualsTo)
+            }
+            else if (condition.greaterThan) {
+                assertions.push(value > condition.greaterThan)
+            }
+            else if (condition.lessOrEqualsTo) {
+                assertions.push(value <= condition.lessOrEqualsTo)
+            }
+            else if (condition.lessThan) {
+                assertions.push(value < condition.lessThan)
+            }
+            else if (condition.notEquals) {
+                assertions.push(value !== condition.notEquals)
+            }
+            else { }
+        }
 
-        console.log(response)
+        if (isRangeConditionType(condition)) {
+            if (condition.between) {
+                const [lower, upper] = condition.between
+                assertions.push(lower <= value && value <= upper)
+            }
+            else { }
+        }
+    }
+    return assertions
+}
+
+function allOfConditionsMet(conditions: ConditionType[], value: any) {
+    const assertions = evaluateConditions(conditions, value)
+    return assertions.every(assertion => assertion === true)
+}
+
+function anyOfConditionsMet(conditions: ConditionType[], value: any) {
+    const assertions = evaluateConditions(conditions, value)
+    return assertions.some(assertion => assertion === true)
+}
+
+interval(1 * Seconds)
+    .pipe(map(async _ => {
+        const thing: Record<string, [number, [boolean, Partial<Actions>], Handler<[boolean, Partial<Actions>]>]> = {}
+
+        for (const key in routines) {
+            const adapter = adapters[key]
+            const value = await adapter.read()
+            const { actions, conditions } = routines[key]
+            const meetsConditions = conditionsMet(conditions, value)
+
+            if (isScheduledRoutine(routines[key])) {
+                // TODO: Handle schedule
+            }
+            thing[key] = [value, [meetsConditions, actions], adapter.handler]
+        }
+
+        return thing
+    }))
+    .subscribe(async commands => {
+        for (const key in commands) {
+            const [_, args, execute] = commands[key]
+            await execute(args)
+        }
     })
-
-// const ssdDisplay = new SSD1306Driver({ height: 64, width: 128 })
-
-// try {
-//     const characterScreen = await startCharacterScreen(ssdDisplay)
-//     await characterScreen.message.write(
-//         `
-// `)
-// } catch (error) {
-//     console.warn(`${SSD1306Driver.constructor.name} is not available:`, error)
-// }
-

@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/main.ts",
             "deviceId": "${command:deviceScriptSimulator}",
-            "stopOnEntry": true
+            "stopOnEntry": false
         },
     ]
 }
