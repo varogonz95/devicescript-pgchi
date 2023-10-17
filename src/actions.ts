@@ -8,6 +8,7 @@ export interface PushNotificationAction {
 export interface SetValueAction {
     target: string
     value: number | boolean
+    otherwise?: number | boolean,
     duration?: number
     durationUntil?: RoutineCondition
 }
@@ -23,16 +24,9 @@ export interface WebhookAction {
     data?: string
 }
 
-export enum ActionTypes {
-    PushNotification = "pushNotification",
-    SetValue = "set",
-    SendEmail = "sendEmail",
-    Webhook = "webhook",
-}
-
 export interface Actions {
-    [ActionTypes.PushNotification]: PushNotificationAction,
-    [ActionTypes.SendEmail]: SendEmailAction,
-    [ActionTypes.SetValue]: SetValueAction,
-    [ActionTypes.Webhook]: WebhookAction,
+    pushNotification: PushNotificationAction,
+    sendEmail: SendEmailAction,
+    setValue: SetValueAction,
+    webhook: WebhookAction,
 }

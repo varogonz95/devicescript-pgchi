@@ -1,133 +1,130 @@
-import { Sensor } from "@devicescript/core";
-import { collectTime } from "@devicescript/observables";
-import { LightLevelConfig, SoilMoistureConfig, startLightLevel, startSoilMoisture } from "@devicescript/servers";
-import { pins } from "@dsboard/esp32_devkit_c";
-import { DeviceConfig, PeripheralConfigTypes } from "./config";
-import { UnsupportedSensorServerError } from "./errors";
-import { DevicePeripheralTypes, PeripheralType, PeripheralAdapter, PeripheralAdapterFactory } from "./peripherals";
-
-const Seconds = 1000;
+import { Handler, delay } from "@devicescript/core";
+import { interval, map } from "@devicescript/observables";
+import { DeviceConfig } from "./config";
+import { Seconds } from "./constants";
+import { DevicePeripheralTypes, PeripheralAdapter, PeripheralAdapterFactory, PeripheralType } from "./peripherals";
+import { ConditionType, RoutineCondition, isAllOfCondition, isAnyOfCondition, isRangeConditionType, isScalarConditionType, isScheduledRoutine } from "./routines";
+import { Actions } from "./actions";
+import { DriverStore } from "./driver-store";
 
 const deviceConfig: DeviceConfig = {
     peripherals: {
-        foo: { type: PeripheralType.LightLevel, config: { pin: pins.P32 } },
-        bar: { type: PeripheralType.SoilMoisture, config: { pin: pins.P32 } },
+        foo: { type: PeripheralType.LightLevel, invert: true },
+        bar: { type: PeripheralType.SoilMoisture },
+        baz: { type: PeripheralType.Relay },
     },
     routines: {
         foo: {
-            condition: {
+            conditions: {
                 allOf: [
-                    { between: [1, 2] }
+                    { between: [0, 0.15] },
                 ]
             },
             actions: {
-                set: {
-                    target: "relay_lamp",
+                setValue: {
+                    target: "baz",
                     value: true,
-                    duration: 10 * Seconds
+                    otherwise: false
                 }
             }
         }
     }
 }
 
-const startSensorServer = (sensor: PeripheralConfigTypes): Sensor => {
-    switch (sensor.type) {
-        case PeripheralType.LightLevel:
-            return startLightLevel(sensor.config as LightLevelConfig)
 
-        case PeripheralType.SoilMoisture:
-            return startSoilMoisture(sensor.config as SoilMoistureConfig)
+const { peripherals, routines } = deviceConfig
 
-        default: 
-            const config = sensor as PeripheralConfigTypes
-            throw new UnsupportedSensorServerError(config.type)
-    }
+type PeripheralAdapters = Record<string, PeripheralAdapter<DevicePeripheralTypes>>
+let adapters: PeripheralAdapters = {}
+
+// Initialize sensor servers respectively
+for (const pKey in peripherals) {
+    const config = peripherals[pKey]
+    adapters[pKey] = PeripheralAdapterFactory.create(config, routines[pKey])
 }
 
-const { peripherals: sensors } = deviceConfig
+DriverStore.createInstance(adapters)
 
-type ServerRecord = Record<string, PeripheralAdapter<DevicePeripheralTypes>>
+function conditionsMet(conditions: RoutineCondition, value: any) {
+    if (isAllOfCondition(conditions)) {
+        return allOfConditionsMet(conditions.allOf, value);
+    }
 
-let serverAdapterRecords: ServerRecord = {}
-for (const key in sensors) {
-    const sensor = sensors[key]
-        serverAdapterRecords[key] = PeripheralAdapterFactory.create(sensor.type, sensor.config)
+    if (isAnyOfCondition(conditions)) {
+        return anyOfConditionsMet(conditions.anyOf, value);
+    }
+
+    return false;
 }
 
-/* const toSensorDataRecords = <T extends Record<string, unknown>>(): OperatorFunction<T, SensorDataRecord> => {
-    return function operator(source: Observable<T>) {
-        return source.pipe(map((sensors) => {
-            const sensorRecords: SensorDataRecord = {}
+function evaluateConditions(conditions: ConditionType[], value: any) {
+    const assertions: boolean[] = []
 
-            for (const key in sensors) {
-                sensorRecords[key] = {
-                    type: SensorType.LightLevel,
-                    value: sensors[key as string] as number,
-                }
+    for (const condition of conditions) {
+        if (isScalarConditionType(condition)) {
+            if (condition.equals) {
+                assertions.push(value === condition.equals)
             }
-
-            return sensorRecords
-        }))
-    }
-} */
-
-/* function toSensorCommand<T extends SensorDataRecord>(servers: ServerRecord): OperatorFunction<T, SensorCommandRecord> {
-    return function operator(source: Observable<T>) {
-        return source.pipe(map((sensors) => {
-            const commands: SensorCommandRecord = {}
-
-            for (const key in sensors) {
-                const data = sensors[key]
-                commands[key] = {
-                    data,
-                    execute: (routine) => {
-                        const { actions, condition, } = routine as Routine
-                        const { comparison, subject, value } = condition
-                        const { pushNotification, sendEmail, setValue, webhook } = actions
-
-                        if (typeof value === "object") {
-                            if (comparison === "between") {
-                                source.pipe(filter(sensors => value[0] < sensors[subject].value && sensors[subject].value < value[1]))
-                            }
-                        }
-
-                        if (typeof value === "number") {
-                            if (comparison === "equals" && data.value === sensors[subject].value) {
-
-                                if (setValue) {
-                                    const { target, value, duration, durationUntil } = setValue
-                                    const serverAdapter = new ReadableSensorAdapter()
-                                    servers[target].
-                                }
-
-                            }
-                            else if (comparison === "greaterThan") {
-                                source.pipe(filter(sensors => value > sensors[subject].value))
-                            }
-                            else if (comparison === "greaterOrEqualsTo") {
-                                source.pipe(filter(sensors => value >= sensors[subject].value))
-                            }
-                            else if (comparison === "lessThan") {
-                                source.pipe(filter(sensors => value < sensors[subject].value))
-                            }
-                            else if (comparison === "lessOrEqualsTo") {
-                                source.pipe(filter(sensors => value <= sensors[subject].value))
-                            }
-                        }
-                    }
-                }
+            else if (condition.greaterOrEqualsTo) {
+                assertions.push(value >= condition.greaterOrEqualsTo)
             }
+            else if (condition.greaterThan) {
+                assertions.push(value > condition.greaterThan)
+            }
+            else if (condition.lessOrEqualsTo) {
+                assertions.push(value <= condition.lessOrEqualsTo)
+            }
+            else if (condition.lessThan) {
+                assertions.push(value < condition.lessThan)
+            }
+            else if (condition.notEquals) {
+                assertions.push(value !== condition.notEquals)
+            }
+            else { }
+        }
 
-            return commands
-        }))
+        if (isRangeConditionType(condition)) {
+            if (condition.between) {
+                const [lower, upper] = condition.between
+                assertions.push(lower <= value && value <= upper)
+            }
+            else { }
+        }
     }
-} */
+    return assertions
+}
 
+function allOfConditionsMet(conditions: ConditionType[], value: any) {
+    const assertions = evaluateConditions(conditions, value)
+    return assertions.every(assertion => assertion === true)
+}
 
-collectTime(sensorRecords, 1 * Seconds)
-    // .pipe(toSensorDataRecords())
-    // .pipe(toSensorCommand())
-    .subscribe(observer => { 
-        // TODO: Sensor actions logic here...
+function anyOfConditionsMet(conditions: ConditionType[], value: any) {
+    const assertions = evaluateConditions(conditions, value)
+    return assertions.some(assertion => assertion === true)
+}
+
+interval(1 * Seconds)
+    .pipe(map(async _ => {
+        const thing: Record<string, [number, [boolean, Partial<Actions>], Handler<[boolean, Partial<Actions>]>]> = {}
+
+        for (const key in routines) {
+            const adapter = adapters[key]
+            const value = await adapter.read()
+            const { actions, conditions } = routines[key]
+            const meetsConditions = conditionsMet(conditions, value)
+
+            if (isScheduledRoutine(routines[key])) {
+                // TODO: Handle schedule
+            }
+            thing[key] = [value, [meetsConditions, actions], adapter.handler]
+        }
+
+        return thing
+    }))
+    .subscribe(async commands => {
+        for (const key in commands) {
+            const [_, args, execute] = commands[key]
+            await execute(args)
+        }
     })

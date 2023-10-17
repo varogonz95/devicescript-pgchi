@@ -1,17 +1,17 @@
-import { BaseServiceConfig, LightLevelConfig, SoilMoistureConfig } from "@devicescript/servers"
-import { Routine, ScheduledRoutine } from "./routines"
-import { PeripheralType } from "./types"
+import { PeripheralType } from "./peripherals"
+import { Routines } from "./routines"
 
-export interface IPeripheralConfig<T extends PeripheralType, C extends BaseServiceConfig> {
+export interface IPeripheralConfig<T extends PeripheralType> {
     type: T
-    config: C
+    invert?: boolean
+    autostart?: boolean
 }
 
 export type PeripheralConfigTypes =
-    | IPeripheralConfig<PeripheralType.LightLevel, LightLevelConfig>
-    | IPeripheralConfig<PeripheralType.SoilMoisture, SoilMoistureConfig>
+    | IPeripheralConfig<PeripheralType.LightLevel>
+    | IPeripheralConfig<PeripheralType.SoilMoisture>
+    | IPeripheralConfig<PeripheralType.Relay>
 
-export type Routines = ScheduledRoutine | Routine
 export type PeripheralsConfig = Record<string, PeripheralConfigTypes>
 export type RoutinesConfig = Record<string, Routines>
 

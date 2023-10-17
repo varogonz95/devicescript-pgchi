@@ -10,15 +10,15 @@ export enum ComparisonType {
     Between = "between",
 }
 
-type NumberValueCondition = {
+export type ScalarCondition = {
     [k in Exclude<ComparisonType, ComparisonType.Between>]: number
 }
 
-type RangeCondition = {
-    [ComparisonType.Between]: [number, number]
+export type RangeCondition = {
+    [k in ComparisonType.Between]: [number, number]
 }
 
-export type ConditionType = NumberValueCondition | RangeCondition
+export type ConditionType = ScalarCondition | RangeCondition
 export type AllOfConditions = { allOf: ConditionType[] }
 export type AnyOfConditions = { anyOf: ConditionType[] }
 
@@ -42,11 +42,37 @@ export interface Schedule {
     repeats?: ScheduleRepeatOptions
 }
 
-export interface Routine {
-    condition: RoutineCondition
+export interface BaseRoutine {
+    conditions: RoutineCondition
     actions: Partial<Actions>
 }
 
-export interface ScheduledRoutine extends Routine {
+export interface ScheduledRoutine extends BaseRoutine {
     schedule: Schedule
+}
+
+export type Routines = BaseRoutine | ScheduledRoutine
+
+export function isBaseRoutine(routine: Routines): routine is BaseRoutine {
+    return Object.keys(routine).every(key => ['actions', 'condition'].includes(key))
+}
+
+export function isScheduledRoutine(routine: Routines): routine is ScheduledRoutine {
+    return (routine as ScheduledRoutine).schedule !== undefined
+}
+
+export function isAllOfCondition(condition: RoutineCondition): condition is AllOfConditions {
+    return (condition as AllOfConditions).allOf !== undefined
+}
+
+export function isAnyOfCondition(condition: RoutineCondition): condition is AnyOfConditions {
+    return (condition as AnyOfConditions).anyOf !== undefined
+}
+
+export function isScalarConditionType(conditionType: any): conditionType is ScalarCondition {
+    return conditionType.between === undefined
+}
+
+export function isRangeConditionType(conditionType: any): conditionType is RangeCondition {
+    return (conditionType as RangeCondition).between !== undefined
 }
