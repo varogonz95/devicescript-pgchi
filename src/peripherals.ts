@@ -1,11 +1,11 @@
 import * as ds from "@devicescript/core";
 import { startLightLevel, startRelay, startSoilMoisture } from "@devicescript/servers";
-import { IPeripheralConfig, PeripheralConfigTypes } from "./config";
-import { LampRelayPin, LightLevelPin, SoilMoisturePin } from "./constants";
-import { UnsupportedSensorServerError } from "./errors";
-import { BaseRoutine, Routines } from "./routines";
 import { Actions } from "./actions";
+import { IPeripheralConfig, PeripheralConfigTypes } from "./config";
+import { LampRelayPin, LightLevelPin, ScreenColumns, SoilMoisturePin } from "./constants";
 import { DriverStore } from "./driver-store";
+import { UnsupportedSensorServerError } from "./errors";
+import { BaseRoutine, ConditionType, Routines, isAllOfCondition, isAnyOfCondition, isRangeConditionType, isScalarConditionType } from "./routines";
 
 export enum PeripheralType {
     LightLevel = 'lightLevel',
@@ -20,29 +20,36 @@ export type DevicePeripheralTypes = AnalogInPeripherals | OutPeripherals;
 export type HandlerArgs = [boolean, Partial<Actions>];
 
 export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any> {
-    public readonly type: PeripheralType
-    public readonly invert: boolean = false
-    public readonly autostart: boolean = false
+    public readonly name: string
+    public readonly invert: boolean
+    public readonly autostart: boolean
+    public readonly display: boolean
+    public readonly displayRow: number
     public readonly register: ds.Register<R>
-    
+
     protected readonly sensor: T
-    protected _latestRead: R
+    public _lastRead: R
     protected _driverStore: DriverStore
 
     constructor(
         peripheral: PeripheralConfigTypes,
         protected readonly _routine?: BaseRoutine) {
+
         this.sensor = this.startServer()
-        this.invert = peripheral.invert || false
-        this.autostart = peripheral.autostart || false
         this.register = this.initRegister()
         this._driverStore = DriverStore.getInstance()
+
+        this.name = peripheral.name || peripheral.type
+        this.invert = peripheral.invert || false
+        this.autostart = peripheral.autostart || false
+        this.display = peripheral.display || false
+        this.displayRow = peripheral.displayRow || 0
+
     }
 
     protected async __read() {
-        this._latestRead = await this.register.read()
-        console.log(this._latestRead);
-        return this._latestRead
+        this._lastRead = await this.register.read()
+        return this._lastRead
     }
 
     public async read() {
@@ -50,29 +57,94 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
     }
 
     public async write(value: R) {
-        if (this._latestRead !== value)
+        if (this._lastRead !== value)
             return await this.register.write(value)
     }
 
-    public async handler(): Promise<ds.Handler<HandlerArgs>> {
-        return async (args: HandlerArgs) => {
-            const [meetsConditions, actions] = args
-            if (actions.setValue) {
-                const { target, value, otherwise, duration, durationUntil } = actions.setValue
-                const newValue = meetsConditions ? value : otherwise
-                const targetDriver = this._driverStore.get(target)
-                await targetDriver.write(newValue)
+    public async runRoutine(): Promise<void> {
+        const meetsConditions = this.conditionsMet()
+        const { actions } = this._routine
 
-                if (duration) {
-                    await ds.delay(duration) // TODO: Improve implementation 
-                    await targetDriver.write(otherwise)
-                }
-            }
+        if (actions.setValue) {
+            const { target, value, otherwise, duration, durationUntil } = actions.setValue
+            const newValue = meetsConditions ? value : otherwise
+            const targetDriver = this._driverStore.get(target)
+            await targetDriver.write(newValue)
 
-            if (actions.sendEmail) {
-                // TODO: Implement email notification
+            if (duration) {
+                // await ds.delay(duration) // TODO: Improve implementation 
+                // await targetDriver.write(otherwise)
             }
         }
+
+        if (actions.sendEmail) {
+            // TODO: Implement email notification
+        }
+    }
+
+    public async toDisplay() {
+        const value = await this.read()
+        return `${this.name}: ${value}`
+    }
+
+    protected conditionsMet() {
+        const { conditions } = this._routine
+        if (isAllOfCondition(conditions)) {
+            return this.allOfConditionsMet(conditions.allOf, this._lastRead);
+        }
+
+        if (isAnyOfCondition(conditions)) {
+            return this.anyOfConditionsMet(conditions.anyOf, this._lastRead);
+        }
+
+        return false;
+    }
+
+    protected evaluateConditions(conditions: ConditionType[], value: any) {
+        const assertions: boolean[] = []
+
+        for (const condition of conditions) {
+            if (isScalarConditionType(condition)) {
+                if (condition.equals) {
+                    assertions.push(value === condition.equals)
+                }
+                else if (condition.greaterOrEqualsTo) {
+                    assertions.push(value >= condition.greaterOrEqualsTo)
+                }
+                else if (condition.greaterThan) {
+                    assertions.push(value > condition.greaterThan)
+                }
+                else if (condition.lessOrEqualsTo) {
+                    assertions.push(value <= condition.lessOrEqualsTo)
+                }
+                else if (condition.lessThan) {
+                    assertions.push(value < condition.lessThan)
+                }
+                else if (condition.notEquals) {
+                    assertions.push(value !== condition.notEquals)
+                }
+                else { }
+            }
+
+            if (isRangeConditionType(condition)) {
+                if (condition.between) {
+                    const [lower, upper] = condition.between
+                    assertions.push(lower <= value && value <= upper)
+                }
+                else { }
+            }
+        }
+        return assertions
+    }
+
+    protected allOfConditionsMet(conditions: ConditionType[], value: any) {
+        const assertions = this.evaluateConditions(conditions, value)
+        return assertions.every(assertion => assertion === true)
+    }
+
+    protected anyOfConditionsMet(conditions: ConditionType[], value: any) {
+        const assertions = this.evaluateConditions(conditions, value)
+        return assertions.some(assertion => assertion === true)
     }
 
     protected abstract startServer(): T
@@ -100,6 +172,22 @@ export class LightLevelAdapter extends PeripheralAdapter<ds.LightLevel, number> 
     protected initRegister(): ds.Register<number> {
         return this.sensor.reading
     }
+
+    public override async toDisplay() {
+        const value = await this.read()
+        const additionalChars = [':', ' ', '[', ']'].length
+        const width = ScreenColumns - this.name.length - additionalChars
+        return `${this.name}: [${this.charProgressBar(value, width)}]`
+    }
+
+    private charProgressBar(value: number, charWidth: number) {
+        const charsLen = Math.map(value, 0, 1, 0, charWidth) - 1
+        let bar = ''
+        for (let i = 0; i < charsLen; i++) {
+            bar += "="
+        }
+        return bar
+    }
 }
 
 export class SoilMoistureAdapter extends PeripheralAdapter<ds.SoilMoisture, number>  {
@@ -115,6 +203,22 @@ export class SoilMoistureAdapter extends PeripheralAdapter<ds.SoilMoisture, numb
 
     protected initRegister(): ds.Register<number> {
         return this.sensor.reading
+    }
+
+    public override async toDisplay() {
+        const value = await this.read()
+        const additionalChars = [':', ' ', ' ', '[', ']'].length
+        const width = ScreenColumns - this.name.length - additionalChars
+        return `${this.name}:  [${this.charProgressBar(value, width)}]`
+    }
+
+    private charProgressBar(value: number, charWidth: number) {
+        const charsLen = Math.map(value, 0, 1, 0, charWidth) - 1
+        let bar = ''
+        for (let i = 0; i < charsLen; i++) {
+            bar += "="
+        }
+        return bar
     }
 }
 

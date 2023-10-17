@@ -1,23 +1,31 @@
-import { Handler, delay } from "@devicescript/core";
-import { interval, map } from "@devicescript/observables";
-import { DeviceConfig } from "./config";
-import { Seconds } from "./constants";
+import { SSD1306Driver, SSD1306Options, startCharacterScreen, startCharacterScreenDisplay } from "@devicescript/drivers";
+import { interval } from "@devicescript/observables";
+import { configureHardware } from "@devicescript/servers";
+import { pins } from "@dsboard/esp32_wroom_c";
+import { DeviceConfig, RoutinesConfig } from "./config";
+import { ScreenColumns, ScreenHeight, ScreenRows, ScreenWidth, Seconds } from "./constants";
 import { DevicePeripheralTypes, PeripheralAdapter, PeripheralAdapterFactory, PeripheralType } from "./peripherals";
-import { ConditionType, RoutineCondition, isAllOfCondition, isAnyOfCondition, isRangeConditionType, isScalarConditionType, isScheduledRoutine } from "./routines";
-import { Actions } from "./actions";
-import { DriverStore } from "./driver-store";
+import { deviceIdentifier } from "@devicescript/core";
+
+configureHardware({
+    i2c: {
+        pinSCL: pins.P22,
+        pinSDA: pins.P21
+    }
+})
 
 const deviceConfig: DeviceConfig = {
+    name: "node-1",
     peripherals: {
-        foo: { type: PeripheralType.LightLevel, invert: true },
-        bar: { type: PeripheralType.SoilMoisture },
-        baz: { type: PeripheralType.Relay },
+        foo: { name: "Light", type: PeripheralType.LightLevel, display: true, invert: true },
+        bar: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
+        baz: { name: "Lamp", type: PeripheralType.Relay },
     },
     routines: {
         foo: {
             conditions: {
                 allOf: [
-                    { between: [0, 0.15] },
+                    { between: [0, 0.25] },
                 ]
             },
             actions: {
@@ -32,99 +40,47 @@ const deviceConfig: DeviceConfig = {
 }
 
 
-const { peripherals, routines } = deviceConfig
+type PeripheralAdapters = PeripheralAdapter<DevicePeripheralTypes>
 
-type PeripheralAdapters = Record<string, PeripheralAdapter<DevicePeripheralTypes>>
-let adapters: PeripheralAdapters = {}
-
-// Initialize sensor servers respectively
-for (const pKey in peripherals) {
-    const config = peripherals[pKey]
-    adapters[pKey] = PeripheralAdapterFactory.create(config, routines[pKey])
-}
-
-DriverStore.createInstance(adapters)
-
-function conditionsMet(conditions: RoutineCondition, value: any) {
-    if (isAllOfCondition(conditions)) {
-        return allOfConditionsMet(conditions.allOf, value);
+function initializeAdapters(routines: RoutinesConfig): PeripheralAdapters[] {
+    let adapters: PeripheralAdapters[] = []
+    for (const key in peripherals) {
+        const config = peripherals[key]
+        const peripheral = PeripheralAdapterFactory.create(config, routines[key]);
+        adapters.push(peripheral)
     }
-
-    if (isAnyOfCondition(conditions)) {
-        return anyOfConditionsMet(conditions.anyOf, value);
-    }
-
-    return false;
+    return adapters
 }
 
-function evaluateConditions(conditions: ConditionType[], value: any) {
-    const assertions: boolean[] = []
+const deviceId = deviceIdentifier("self");
+const { name: deviceName, peripherals, routines } = deviceConfig
+const ssd1306Options: SSD1306Options = {
+    width: ScreenWidth,
+    height: ScreenHeight,
+    devAddr: 0x3c
+};
+const ssd1306 = await startCharacterScreenDisplay(
+    new SSD1306Driver(ssd1306Options),
+    {
+        columns: ScreenColumns,
+        rows: ScreenRows,
+    })
+const adapters = initializeAdapters(routines)
+// DriverStore.createInstance(adapters)
 
-    for (const condition of conditions) {
-        if (isScalarConditionType(condition)) {
-            if (condition.equals) {
-                assertions.push(value === condition.equals)
-            }
-            else if (condition.greaterOrEqualsTo) {
-                assertions.push(value >= condition.greaterOrEqualsTo)
-            }
-            else if (condition.greaterThan) {
-                assertions.push(value > condition.greaterThan)
-            }
-            else if (condition.lessOrEqualsTo) {
-                assertions.push(value <= condition.lessOrEqualsTo)
-            }
-            else if (condition.lessThan) {
-                assertions.push(value < condition.lessThan)
-            }
-            else if (condition.notEquals) {
-                assertions.push(value !== condition.notEquals)
-            }
-            else { }
-        }
-
-        if (isRangeConditionType(condition)) {
-            if (condition.between) {
-                const [lower, upper] = condition.between
-                assertions.push(lower <= value && value <= upper)
-            }
-            else { }
-        }
-    }
-    return assertions
-}
-
-function allOfConditionsMet(conditions: ConditionType[], value: any) {
-    const assertions = evaluateConditions(conditions, value)
-    return assertions.every(assertion => assertion === true)
-}
-
-function anyOfConditionsMet(conditions: ConditionType[], value: any) {
-    const assertions = evaluateConditions(conditions, value)
-    return assertions.some(assertion => assertion === true)
-}
 
 interval(1 * Seconds)
-    .pipe(map(async _ => {
-        const thing: Record<string, [number, [boolean, Partial<Actions>], Handler<[boolean, Partial<Actions>]>]> = {}
+    .subscribe(async time => {
+        const sensorData = adapters
+            .filter(adapter => adapter.display)
+            .sort((a, b) => a.displayRow - b.displayRow)
+            .map(async adapter => await adapter.toDisplay())
+            .join('\n')
 
-        for (const key in routines) {
-            const adapter = adapters[key]
-            const value = await adapter.read()
-            const { actions, conditions } = routines[key]
-            const meetsConditions = conditionsMet(conditions, value)
+        // console.data(sensorData);
 
-            if (isScheduledRoutine(routines[key])) {
-                // TODO: Handle schedule
-            }
-            thing[key] = [value, [meetsConditions, actions], adapter.handler]
-        }
+        await ssd1306.message.write(
+            `${deviceName}-${deviceId}
 
-        return thing
-    }))
-    .subscribe(async commands => {
-        for (const key in commands) {
-            const [_, args, execute] = commands[key]
-            await execute(args)
-        }
+${sensorData}`)
     })

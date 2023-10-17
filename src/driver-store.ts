@@ -4,7 +4,7 @@ import { DevicePeripheralTypes, PeripheralAdapter } from "./peripherals";
 type Drivers = Record<string, PeripheralAdapter<DevicePeripheralTypes>>;
 
 export class DriverStore {
-    private static _instance: DriverStore = null
+    private static _instance: DriverStore
     private static _drivers: Drivers
 
     private constructor() { }
