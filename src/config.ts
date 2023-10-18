@@ -1,5 +1,5 @@
 import { PeripheralType } from "./peripherals"
-import { Routines } from "./routines"
+import { RoutineTypes } from "./routines"
 
 export interface IPeripheralConfig<T extends PeripheralType> {
     type: T
@@ -16,7 +16,7 @@ export type PeripheralConfigTypes =
     | IPeripheralConfig<PeripheralType.Relay>
 
 export type PeripheralsConfig = Record<string, PeripheralConfigTypes>
-export type RoutinesConfig = Record<string, Routines>
+export type RoutinesConfig = Record<string, RoutineTypes>
 
 export interface DeviceConfig {
     name: string

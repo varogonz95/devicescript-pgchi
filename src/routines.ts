@@ -51,13 +51,13 @@ export interface ScheduledRoutine extends BaseRoutine {
     schedule: Schedule
 }
 
-export type Routines = BaseRoutine | ScheduledRoutine
+export type RoutineTypes = BaseRoutine | ScheduledRoutine
 
-export function isBaseRoutine(routine: Routines): routine is BaseRoutine {
+export function isBaseRoutine(routine: RoutineTypes): routine is BaseRoutine {
     return Object.keys(routine).every(key => ['actions', 'condition'].includes(key))
 }
 
-export function isScheduledRoutine(routine: Routines): routine is ScheduledRoutine {
+export function isScheduledRoutine(routine: RoutineTypes): routine is ScheduledRoutine {
     return (routine as ScheduledRoutine).schedule !== undefined
 }
 
