@@ -10,6 +10,21 @@
             "name": "buttonIO0",
             "pin": 0,
             "service": "button"
+        },
+        {
+            "name": "lampRelay",
+            "pin": 27,
+            "service": "relay"
+        },
+        {
+            "name": "lightLevel",
+            "pin": 32,
+            "service": "analog:lightLevel"
+        },
+        {
+            "name": "soilMoisture",
+            "pin": 33,
+            "service": "analog:soilMoisture"
         }
     ],
     "led": {
@@ -26,9 +41,6 @@
         "P23": 23,
         "P25": 25,
         "P26": 26,
-        "P27": 27,
-        "P32": 32,
-        "P33": 33,
         "P34": 34,
         "P35": 35,
         "P4": 4,

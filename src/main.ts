@@ -2,7 +2,7 @@ import { deviceIdentifier } from "@devicescript/core";
 import { SSD1306Driver, SSD1306Options, startCharacterScreenDisplay } from "@devicescript/drivers";
 import { DeviceConfig, PeripheralsConfig } from "./config";
 import { ScreenColumns, ScreenHeight, ScreenRows, ScreenWidth, Seconds, ServiceUrl } from "./constants";
-import { PeripheralAdapterFactory, PeripheralRecords } from "./peripherals";
+import { PeripheralAdapterFactory, PeripheralRecords, PeripheralType } from "./peripherals";
 import { runAll } from "./routine-orchestrator";
 import { fetch } from "@devicescript/net";
 
@@ -21,35 +21,50 @@ const ssd1306 = await startCharacterScreenDisplay(
 )
 
 
-// const deviceConfig: DeviceConfig = {
-//     name: "node-1",
-//     peripherals: {
-//         foo: { name: "Light", type: PeripheralType.LightLevel, display: true, invert: true },
-//         bar: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
-//         baz: { name: "Lamp", type: PeripheralType.Relay, display: true },
-//     },
-//     routines: {
-//         foo: {
-//             conditions: {
-//                 allOf: [
-//                     { between: [0, 0.25] },
-//                 ]
-//             },
-//             actions: {
-//                 setValue: {
-//                     target: "baz",
-//                     value: true,
-//                     otherwise: false
-//                 }
-//             }
-//         }
-//     }
-// }
-const response = await fetch(ServiceUrl, {
-    headers: {},
-    method: "GET"
-})
-const deviceConfig = (await response.json()) as DeviceConfig
+const deviceConfig: DeviceConfig = {
+    name: "node-1",
+    peripherals: {
+        light: { name: "Light", type: PeripheralType.LightLevel, display: true, invert: true },
+        soil: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
+        lamp: { name: "Lamp", type: PeripheralType.Relay, display: true },
+        pump: { name: "Pump", type: PeripheralType.Relay, display: true },
+    },
+    routines: {
+        light: {
+            conditions: {
+                allOf: [
+                    { between: [0, 0.25] },
+                ]
+            },
+            actions: {
+                setValue: {
+                    target: "lamp",
+                    value: true,
+                    otherwise: false
+                }
+            }
+        },
+        soil: {
+            conditions: {
+                allOf: [
+                    { between: [0, 0.1] },
+                ]
+            },
+            actions: {
+                setValue: {
+                    target: "pump",
+                    value: true,
+                    otherwise: false
+                }
+            }
+        },
+    }
+}
+// const response = await fetch(ServiceUrl, {
+//     headers: {},
+//     method: "GET"
+// })
+// const deviceConfig = (await response.json()) as DeviceConfig2
 const { name: deviceName, peripherals, routines } = deviceConfig
 const adapters = initializeAdapters(peripherals)
 

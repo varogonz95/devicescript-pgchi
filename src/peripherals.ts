@@ -1,7 +1,7 @@
 import * as ds from "@devicescript/core";
 import { startLightLevel, startRelay, startSoilMoisture } from "@devicescript/servers";
 import { IPeripheralConfig, PeripheralConfigTypes } from "./config";
-import { LampRelayPin, LightLevelPin, ScreenColumns, SoilMoisturePin } from "./constants";
+import { ScreenColumns } from "./constants";
 import { UnsupportedSensorServerError } from "./errors";
 
 export enum PeripheralType {
@@ -77,7 +77,7 @@ export class LightLevelAdapter extends PeripheralAdapter<ds.LightLevel, number> 
     }
 
     protected startServer(): ds.LightLevel {
-        return startLightLevel({ pin: ds.gpio(LightLevelPin) })
+        return new ds.LightLevel(this.name)
     }
 
     protected initRegister(): ds.Register<number> {
@@ -109,7 +109,7 @@ export class SoilMoistureAdapter extends PeripheralAdapter<ds.SoilMoisture, numb
     }
 
     protected startServer(): ds.SoilMoisture {
-        return startSoilMoisture({ pin: ds.gpio(SoilMoisturePin) })
+        return new ds.SoilMoisture(this.name)
     }
 
     protected initRegister(): ds.Register<number> {
@@ -146,7 +146,7 @@ export class RelayAdapter extends PeripheralAdapter<ds.Relay, boolean> {
     }
 
     protected startServer(): ds.Relay {
-        return startRelay({ pin: ds.gpio(LampRelayPin) })
+        return new ds.Relay(this.name)
     }
 
     protected initRegister(): ds.Register<boolean> {
