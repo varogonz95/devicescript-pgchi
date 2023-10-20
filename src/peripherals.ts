@@ -2,9 +2,7 @@ import * as ds from "@devicescript/core";
 import { startLightLevel, startRelay, startSoilMoisture } from "@devicescript/servers";
 import { IPeripheralConfig, PeripheralConfigTypes } from "./config";
 import { LampRelayPin, LightLevelPin, ScreenColumns, SoilMoisturePin } from "./constants";
-import { DriverStore } from "./driver-store";
 import { UnsupportedSensorServerError } from "./errors";
-import { ConditionType, RoutineTypes, isAllOfCondition, isAnyOfCondition, isRangeConditionType, isScalarConditionType } from "./routines";
 
 export enum PeripheralType {
     LightLevel = 'lightLevel',
@@ -39,10 +37,6 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
         this.display = peripheral.display || false
         this.displaySlot = peripheral.displayRow || 0
 
-    }
-    
-    protected getStore() {
-        return DriverStore.getInstance()
     }
 
     protected async __read() {

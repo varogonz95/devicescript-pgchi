@@ -1,50 +1,12 @@
 import { deviceIdentifier } from "@devicescript/core";
 import { SSD1306Driver, SSD1306Options, startCharacterScreenDisplay } from "@devicescript/drivers";
-import { configureHardware } from "@devicescript/servers";
-import { pins } from "@dsboard/esp32_wroom_c";
-import { DeviceConfig, PeripheralsConfig, RoutinesConfig } from "./config";
-import { ScreenColumns, ScreenHeight, ScreenRows, ScreenWidth, Seconds } from "./constants";
-import { DriverStore } from "./driver-store";
-import { DevicePeripheralTypes, PeripheralAdapter, PeripheralAdapterFactory, PeripheralRecords, PeripheralType } from "./peripherals";
-import { RoutineOrchestrator } from "./routine-orchestrator";
-
-configureHardware({
-    i2c: {
-        pinSCL: pins.P22,
-        pinSDA: pins.P21
-    }
-})
-
-const deviceConfig: DeviceConfig = {
-    name: "node-1",
-    peripherals: {
-        foo: { name: "Light", type: PeripheralType.LightLevel, display: true, invert: true },
-        bar: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
-        baz: { name: "Lamp", type: PeripheralType.Relay, display: true },
-    },
-    routines: {
-        foo: {
-            conditions: {
-                allOf: [
-                    { between: [0, 0.25] },
-                ]
-            },
-            actions: {
-                setValue: {
-                    target: "baz",
-                    value: true,
-                    otherwise: false
-                }
-            }
-        }
-    }
-}
-
+import { DeviceConfig, PeripheralsConfig } from "./config";
+import { ScreenColumns, ScreenHeight, ScreenRows, ScreenWidth, Seconds, ServiceUrl } from "./constants";
+import { PeripheralAdapterFactory, PeripheralRecords } from "./peripherals";
+import { runAll } from "./routine-orchestrator";
+import { fetch } from "@devicescript/net";
 
 const deviceId = deviceIdentifier("self");
-const { name: deviceName, peripherals, routines } = deviceConfig
-const adapters = initializeAdapters(peripherals)
-const routineOrchestrator = new RoutineOrchestrator()
 const ssd1306Options: SSD1306Options = {
     width: ScreenWidth,
     height: ScreenHeight,
@@ -58,6 +20,38 @@ const ssd1306 = await startCharacterScreenDisplay(
     }
 )
 
+
+// const deviceConfig: DeviceConfig = {
+//     name: "node-1",
+//     peripherals: {
+//         foo: { name: "Light", type: PeripheralType.LightLevel, display: true, invert: true },
+//         bar: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
+//         baz: { name: "Lamp", type: PeripheralType.Relay, display: true },
+//     },
+//     routines: {
+//         foo: {
+//             conditions: {
+//                 allOf: [
+//                     { between: [0, 0.25] },
+//                 ]
+//             },
+//             actions: {
+//                 setValue: {
+//                     target: "baz",
+//                     value: true,
+//                     otherwise: false
+//                 }
+//             }
+//         }
+//     }
+// }
+const response = await fetch(ServiceUrl, {
+    headers: {},
+    method: "GET"
+})
+const deviceConfig = (await response.json()) as DeviceConfig
+const { name: deviceName, peripherals, routines } = deviceConfig
+const adapters = initializeAdapters(peripherals)
 
 function initializeAdapters(peripherals: PeripheralsConfig) {
     let adapters: PeripheralRecords = {}
@@ -82,5 +76,5 @@ setInterval(async () => {
 ------------------------------------    
 ${sensorData}`)
 
-    await routineOrchestrator.runAll(adapters, routines)
+    await runAll(adapters, routines)
 }, 1 * Seconds)
