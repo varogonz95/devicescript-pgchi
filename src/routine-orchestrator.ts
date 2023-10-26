@@ -9,15 +9,10 @@ export async function runAll(peripherals: PeripheralRecords, routines: RoutinesC
         const meetsConditions = conditionsMet(conditions, reading)
 
         if (actions.setValue) {
-            const { target, value, otherwise, duration, durationUntil } = actions.setValue
-            const peripheralTarget = peripherals[target]
+            const { target, value, otherwise, durationOptions } = actions.setValue
+            const peripheral = peripherals[target]
             const newValue = meetsConditions ? value : otherwise
-            await peripheralTarget.write(newValue)
-
-            // if (duration) {
-            //     await ds.delay(duration) // TODO: Improve implementation 
-            //     await targetDriver.write(otherwise)
-            // }
+            await peripheral.write(newValue, durationOptions)
         }
 
         if (actions.sendEmail) {

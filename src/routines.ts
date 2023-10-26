@@ -1,4 +1,4 @@
-import { Actions } from "./actions"
+import { Action } from "./actions"
 
 export enum ComparisonType {
     GreaterThan = "greaterThan",
@@ -44,7 +44,7 @@ export interface Schedule {
 
 export interface BaseRoutine {
     conditions: RoutineCondition
-    actions: Partial<Actions>
+    actions: Action[]
 }
 
 export interface ScheduledRoutine extends BaseRoutine {

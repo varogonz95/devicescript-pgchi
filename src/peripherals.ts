@@ -1,8 +1,8 @@
 import * as ds from "@devicescript/core";
-import { startLightLevel, startRelay, startSoilMoisture } from "@devicescript/servers";
-import { IPeripheralConfig, PeripheralConfigTypes } from "./config";
+import { PeripheralConfig } from "./config";
 import { ScreenColumns } from "./constants";
 import { UnsupportedSensorServerError } from "./errors";
+import { DurationOptions } from "./actions";
 
 export enum PeripheralType {
     LightLevel = 'lightLevel',
@@ -13,11 +13,13 @@ export enum PeripheralType {
 export type AnalogInPeripherals = ds.LightLevel | ds.SoilMoisture
 export type OutPeripherals = ds.Relay
 export type DevicePeripheralTypes = AnalogInPeripherals | OutPeripherals;
-export type PeripheralRecords = Record<string, PeripheralAdapter<DevicePeripheralTypes>>
+export type DevicePeripheral = PeripheralAdapter<DevicePeripheralTypes>;
+export type PeripheralRecords = Record<string, DevicePeripheral>
 
 export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any> {
     public readonly name: string
-    public readonly invert: boolean
+    // public readonly default: R
+    public readonly reverse: boolean
     public readonly autostart: boolean
     public readonly display: boolean
     public readonly displaySlot: number
@@ -28,15 +30,15 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
 
     constructor(
         public id: string,
-        peripheral: PeripheralConfigTypes) {
+        peripheral: PeripheralConfig) {
         this.sensor = this.startServer()
         this.register = this.initRegister()
         this.name = peripheral.name || peripheral.type
-        this.invert = peripheral.invert || false
+        // this.default = peripheral.default as any
+        this.reverse = peripheral.reverse || false
         this.autostart = peripheral.autostart || false
         this.display = peripheral.display || false
         this.displaySlot = peripheral.displayRow || 0
-
     }
 
     protected async __read() {
@@ -48,9 +50,16 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
         return await this.__read()
     }
 
-    public async write(value: R) {
-        if (this._lastRead !== value)
-            return await this.register.write(value)
+    public readonly writeDurationHandler =
+        (peripheral: DevicePeripheral, value: R) => async () => await peripheral.write(value);
+
+    public async write(value: R, options?: DurationOptions<R>) {
+        if (this._lastRead !== value) {
+            await this.register.write(value)
+        }
+        if (options) {
+            setTimeout(this.writeDurationHandler(this, options.fallbackValue), options.duration)
+        }
     }
 
     public async toDisplay() {
@@ -65,14 +74,14 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
 export class LightLevelAdapter extends PeripheralAdapter<ds.LightLevel, number>  {
     constructor(
         key: string,
-        peripheral: IPeripheralConfig<PeripheralType.LightLevel>) {
+        peripheral: PeripheralConfig) {
         super(key, peripheral)
     }
 
     public override async read(): Promise<number> {
         const value = await this.__read()
-        const newMin = this.invert ? 1 : 0;
-        const newMax = this.invert ? 0 : 1;
+        const newMin = this.reverse ? 1 : 0;
+        const newMax = this.reverse ? 0 : 1;
         return Math.map(value, 0, 1, newMin, newMax)
     }
 
@@ -104,7 +113,7 @@ export class LightLevelAdapter extends PeripheralAdapter<ds.LightLevel, number> 
 export class SoilMoistureAdapter extends PeripheralAdapter<ds.SoilMoisture, number>  {
     constructor(
         key: string,
-        peripheral: IPeripheralConfig<PeripheralType.SoilMoisture>) {
+        peripheral: PeripheralConfig) {
         super(key, peripheral)
     }
 
@@ -136,7 +145,7 @@ export class SoilMoistureAdapter extends PeripheralAdapter<ds.SoilMoisture, numb
 export class RelayAdapter extends PeripheralAdapter<ds.Relay, boolean> {
     constructor(
         key: string,
-        peripheral: IPeripheralConfig<PeripheralType.Relay>) {
+        peripheral: PeripheralConfig) {
         super(key, peripheral)
     }
 
@@ -155,7 +164,7 @@ export class RelayAdapter extends PeripheralAdapter<ds.Relay, boolean> {
 }
 
 export class PeripheralAdapterFactory {
-    public static create(key: string, peripheral: PeripheralConfigTypes): PeripheralAdapter<DevicePeripheralTypes> {
+    public static create(key: string, peripheral: PeripheralConfig): DevicePeripheral {
         switch (peripheral.type) {
             case PeripheralType.LightLevel:
                 return new LightLevelAdapter(key, peripheral)
@@ -167,7 +176,7 @@ export class PeripheralAdapterFactory {
                 return new RelayAdapter(key, peripheral)
 
             default:
-                const type = (peripheral as PeripheralConfigTypes).type
+                const type = (peripheral as PeripheralConfig).type
                 throw new UnsupportedSensorServerError(type)
         }
     }
