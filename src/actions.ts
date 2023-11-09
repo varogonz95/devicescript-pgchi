@@ -33,6 +33,9 @@ export enum ActionType {
     Webhook = "webhook",
 }
 
-export type SetValueActionType = { type: "setValue" | ActionType.SetValue } & SetValueAction
 
-export type Action = SetValueActionType // | ...
+export type Actions =
+    | { [ActionType.PushNotification]: PushNotificationAction }
+    | { [ActionType.SendEmail]: SendEmailAction }
+    | { [ActionType.SetValue]: SetValueAction }
+    | { [ActionType.Webhook]: WebhookAction }

@@ -1,11 +1,9 @@
 import { deviceIdentifier } from "@devicescript/core";
 import { SSD1306Driver, SSD1306Options, startCharacterScreenDisplay } from "@devicescript/drivers";
 import { DeviceConfig, PeripheralsConfig } from "./config";
-import { ScreenColumns, ScreenHeight, ScreenRows, ScreenWidth, Seconds, ServiceUrl } from "./constants";
+import { ScreenColumns, ScreenHeight, ScreenRows, ScreenWidth, Seconds } from "./constants";
 import { PeripheralAdapterFactory, PeripheralRecords, PeripheralType } from "./peripherals";
 import { runAll } from "./routine-orchestrator";
-import { fetch } from "@devicescript/net";
-import { ActionType } from "./actions";
 
 const deviceId = deviceIdentifier("self");
 const ssd1306Options: SSD1306Options = {
@@ -23,7 +21,7 @@ const ssd1306 = await startCharacterScreenDisplay(
 
 
 const deviceConfig: DeviceConfig = {
-    name: "node-1",
+    name: "PgtochiMK I",
     peripherals: {
         light: { name: "Light", type: PeripheralType.LightLevel, display: true, reverse: true },
         soil: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
@@ -37,14 +35,13 @@ const deviceConfig: DeviceConfig = {
                     { between: [0, 0.25] },
                 ]
             },
-            actions: [
-                {
-                    type: "setValue",
+            actions: {
+                setValue: {
                     target: "lamp",
                     value: true,
                     otherwise: false
                 }
-            ]
+            }
         },
         soil: {
             conditions: {
@@ -52,14 +49,13 @@ const deviceConfig: DeviceConfig = {
                     { between: [0, 0.1] },
                 ]
             },
-            actions: [
-                {
-                    type: "setValue",
+            actions: {
+                setValue: {
                     target: "pump",
                     value: true,
                     otherwise: false
                 }
-            ]
+            }
 
         },
     },
