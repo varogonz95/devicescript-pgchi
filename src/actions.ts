@@ -26,16 +26,11 @@ export interface WebhookAction {
     data?: string
 }
 
-export enum ActionType {
-    PushNotification = "pushNotification",
-    SendEmail = "sendEmail",
-    SetValue = "setValue",
-    Webhook = "webhook",
-}
 
+export type SetValue = { setValue: SetValueAction }
 
 export type Actions =
-    | { [ActionType.PushNotification]: PushNotificationAction }
-    | { [ActionType.SendEmail]: SendEmailAction }
-    | { [ActionType.SetValue]: SetValueAction }
-    | { [ActionType.Webhook]: WebhookAction }
+    | { pushNotification: PushNotificationAction }
+    | { sendEmail: SendEmailAction }
+    | SetValue
+    | { webhook: WebhookAction }

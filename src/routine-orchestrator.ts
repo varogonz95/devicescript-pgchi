@@ -1,3 +1,4 @@
+import { Actions, SetValue } from "./actions";
 import { RoutinesConfig } from "./config";
 import { PeripheralRecords } from "./peripherals";
 import { ConditionType, RoutineCondition, isAllOfCondition, isAnyOfCondition, isRangeConditionType, isScalarConditionType } from "./routines";
@@ -8,16 +9,16 @@ export async function runAll(peripherals: PeripheralRecords, routines: RoutinesC
         const reading = await peripherals[key].read()
         const meetsConditions = conditionsMet(conditions, reading)
 
-        if (actions.setValue) {
+        if (isSetValueAction(actions)) {
             const { target, value, otherwise, durationOptions } = actions.setValue
             const peripheral = peripherals[target]
             const newValue = meetsConditions ? value : otherwise
             await peripheral.write(newValue, durationOptions)
         }
 
-        if (actions.sendEmail) {
-            // TODO: Implement email notification
-        }
+        // if (actions.sendEmail) {
+        //     // TODO: Implement email notification
+        // }
     }
 }
 
@@ -63,3 +64,8 @@ export function anyOfConditionsMet(conditions: ConditionType[], value: any) {
     return evaluateConditions(conditions, value)
         .some(assertion => assertion === true)
 }
+
+function isSetValueAction(actions: Actions): actions is SetValue {
+    return (actions as SetValue).setValue !== undefined
+}
+
