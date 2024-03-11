@@ -3,6 +3,7 @@ import { PeripheralConfig } from "./config";
 import { ScreenColumns } from "./constants";
 import { UnsupportedSensorServerError } from "./errors";
 import { DurationOptions } from "./actions";
+import { Observable } from "@devicescript/observables";
 
 export enum PeripheralType {
     LightLevel = 'lightLevel',
@@ -65,6 +66,10 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
     public async toDisplay() {
         const value = await this.read()
         return `${this.name}: ${value}`
+    }
+
+    public reading<R>(): Observable<R> {
+        return this.register.pipe()
     }
 
     protected abstract startServer(): T

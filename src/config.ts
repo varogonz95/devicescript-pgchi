@@ -1,7 +1,7 @@
 import { PeripheralType } from "./peripherals"
 import { RoutineTypes } from "./routines"
 
-export interface PeripheralConfig{
+export interface PeripheralConfig {
     name: string
     type: PeripheralType
     display?: boolean
@@ -14,7 +14,6 @@ export type PeripheralsConfig = Record<string, PeripheralConfig>
 export type RoutinesConfig = Record<string, RoutineTypes>
 
 export interface DeviceConfig {
-    name: string
     description?: string
     peripherals: PeripheralsConfig
     routines?: RoutinesConfig
