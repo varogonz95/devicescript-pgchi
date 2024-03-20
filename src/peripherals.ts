@@ -19,7 +19,6 @@ export type PeripheralRecords = Record<string, DevicePeripheral>
 
 export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any> {
     public readonly name: string
-    // public readonly default: R
     public readonly reverse: boolean
     public readonly autostart: boolean
     public readonly display: boolean
@@ -27,40 +26,40 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
     public readonly register: ds.Register<R>
 
     protected readonly sensor: T
-    protected _lastRead: R
+
+    private lastRead: R
 
     constructor(
         public id: string,
-        peripheral: PeripheralConfig) {
+        peripheral: PeripheralConfig
+    ) {
         this.sensor = this.startServer()
         this.register = this.initRegister()
         this.name = peripheral.name || peripheral.type
-        // this.default = peripheral.default as any
         this.reverse = peripheral.reverse || false
-        this.autostart = peripheral.autostart || false
         this.display = peripheral.display || false
         this.displaySlot = peripheral.displayRow || 0
     }
 
     protected async __read() {
-        this._lastRead = await this.register.read()
-        return this._lastRead
+        this.lastRead = await this.register.read()
+        return this.lastRead
     }
 
     public async read() {
         return await this.__read()
     }
 
-    public readonly writeDurationHandler =
-        (peripheral: DevicePeripheral, value: R) => async () => await peripheral.write(value);
+    // public readonly writeDurationHandler =
+    //     (peripheral: DevicePeripheral, value: R) => async () => await peripheral.write(value);
 
     public async write(value: R, options?: DurationOptions<R>) {
-        if (this._lastRead !== value) {
+        if (this.lastRead !== value) {
             await this.register.write(value)
         }
-        if (options) {
-            setTimeout(this.writeDurationHandler(this, options.fallbackValue), options.duration)
-        }
+        // if (options) {
+        //     setTimeout(this.writeDurationHandler(this, options.fallbackValue), options.duration)
+        // }
     }
 
     public async toDisplay() {
@@ -70,6 +69,10 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
 
     public reading<R>(): Observable<R> {
         return this.register.pipe()
+    }
+
+    public binding(): ds.ClientRegister<boolean> {
+        return this.sensor.binding();
     }
 
     protected abstract startServer(): T

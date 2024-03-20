@@ -7,7 +7,6 @@ export interface PeripheralConfig {
     display?: boolean
     displayRow?: number
     reverse?: boolean
-    autostart?: boolean
 }
 
 export type PeripheralsConfig = Record<string, PeripheralConfig>

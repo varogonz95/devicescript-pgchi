@@ -1,12 +1,10 @@
 import { deviceIdentifier } from "@devicescript/core";
-import { MQTTClient, startMQTTClient } from "@devicescript/net";
-import { catchError, collect, interval, tap, throttleTime } from "@devicescript/observables";
-import { readSetting } from "@devicescript/settings";
-import { getToken } from "./api/token-generator";
+import { catchError, collectTime, tap } from "@devicescript/observables";
+import { connectToIoTHub } from "./api/azure-iot-hub";
 import { DeviceConfig } from "./config";
 import { seconds } from "./constants";
 import { PeripheralType } from "./peripherals";
-import { initializeAdapters, toReadingRecords } from "./utils";
+import { initializeAdapters, publishSensorData, toReadingRecords, waitTillDevicesAreBound } from "./utils";
 
 const deviceId = deviceIdentifier("self");
 
@@ -23,7 +21,7 @@ const deviceId = deviceIdentifier("self");
 //     }
 // )
 
-const defaultConfig: DeviceConfig = {
+let defaultConfig: DeviceConfig = {
     peripherals: {
         light: { name: "Light", type: PeripheralType.LightLevel, display: true, reverse: true },
         soil: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
@@ -64,66 +62,49 @@ const defaultConfig: DeviceConfig = {
 const { peripherals, routines } = defaultConfig;
 const adapters = initializeAdapters(peripherals);
 
-const altDeviceId = "py01"
-const host = "pgotchi-dev-east-iothub.azure-devices.net";
-const port = 8883;
+await waitTillDevicesAreBound(adapters);
 
-const username = `${host}/${altDeviceId}/?api-version=2021-04-12`;
-const uri = host + "/devices/" + altDeviceId;
-const key = await readSetting('AZURE_IOT_KEY');
-const { token: password } = await getToken(uri, key);
-
-const mqttClient = await startMQTTClient({
-    host,
-    port,
-    username,
-    password,
-    clientId: altDeviceId,
-});
-mqttClient.onerror.subscribe(async err => {
-    console.error('FUCK', err);
-    await mqttClient.stop();
-});
-
-
-// //* Subscribe to topic messages
-// const subscribeTopic = `devices/${altDeviceId}/messages/devicebound/#`;
-// const mqttSubscription = await mqttClient.subscribe(subscribeTopic);
-
-// mqttSubscription.pipe(
-//     catchError((err, message) => {
-//         console.error("Mqtt Error: ", err);
-//         return message;
-//     }),
-//     tap(message => console.debug("Message recieved: ", message.content.toString()))
-// )
-//     .subscribe(message => {
-//         console.log("New config recieved.");
-//         // TODO: Convert message to config obj
-//         // TODO: Run the new config
-//     });
+const altDeviceId = "py01";
+const iotHubClient = await connectToIoTHub(altDeviceId);
 
 const records = toReadingRecords(adapters);
 
 // //* Publish sensor data to topic
 const publishTopic = `devices/${altDeviceId}/messages/events/`;
 
-// collect(
-//     records,
-//     interval(0).pipe(throttleTime(seconds(5))))
-//     .pipe(
-//         catchError((err, sensors) => {
-//             console.error(err);
-//             return sensors;
-//         }),
-//         tap(sensors => console.data({ ...sensors }))
-//     )
-//     .subscribe(async sensors => {
-//         await publishSensorData(mqttClient, publishTopic, sensors);
-//     });
+collectTime(
+    records,
+    seconds(5)
+)
+    .pipe(
+        catchError((err, sensors) => {
+            console.error(err);
+            return sensors;
+        }),
+        tap(sensors => console.data({ ...sensors }))
+    )
+    .subscribe(async sensors => {
+        await publishSensorData(iotHubClient, publishTopic, sensors);
+    });
 
-async function publishSensorData<T>(client: MQTTClient, topic: string, sensors: Record<string, T>) {
-    const message = JSON.stringify({ ...sensors });
-    const success = await client.publish(topic, message);
-    console.debug("Message published: ", success);
-}
+//* Subscribe to topic messages
+const subscribeTopic = `devices/${altDeviceId}/messages/devicebound/#`;
+const iotHubSubscription = await iotHubClient.subscribe(subscribeTopic);
+
+iotHubSubscription
+    .pipe(
+        tap(message => console.debug("Message recieved: ", message.content.toString()))
+    )
+    .subscribe(message => {
+        const jsonContent = message.content.toString();
+        const payload = JSON.parse(jsonContent);
+
+        console.log("New config recieved.");
+        console.debug("Message", jsonContent);
+
+        // TODO: Convert message to config obj
+        defaultConfig = { ...payload } as DeviceConfig
+
+        // TODO: Run the new config
+
+    });
