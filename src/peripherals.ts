@@ -1,11 +1,9 @@
 import * as ds from "@devicescript/core";
-import { startLightLevel, startRelay, startSoilMoisture } from "@devicescript/servers";
-import { IPeripheralConfig, PeripheralConfigTypes } from "./config";
-import { LampRelayPin, LightLevelPin, SoilMoisturePin } from "./constants";
+import { PeripheralConfig } from "./config";
+import { ScreenColumns } from "./constants";
 import { UnsupportedSensorServerError } from "./errors";
-import { BaseRoutine, Routines } from "./routines";
-import { Actions } from "./actions";
-import { DriverStore } from "./driver-store";
+import { DurationOptions } from "./actions";
+import { Observable } from "@devicescript/observables";
 
 export enum PeripheralType {
     LightLevel = 'lightLevel',
@@ -16,63 +14,65 @@ export enum PeripheralType {
 export type AnalogInPeripherals = ds.LightLevel | ds.SoilMoisture
 export type OutPeripherals = ds.Relay
 export type DevicePeripheralTypes = AnalogInPeripherals | OutPeripherals;
-
-export type HandlerArgs = [boolean, Partial<Actions>];
+export type DevicePeripheral = PeripheralAdapter<DevicePeripheralTypes>;
+export type PeripheralRecords = Record<string, DevicePeripheral>
 
 export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any> {
-    public readonly type: PeripheralType
-    public readonly invert: boolean = false
-    public readonly autostart: boolean = false
+    public readonly name: string
+    public readonly reverse: boolean
+    public readonly autostart: boolean
+    public readonly display: boolean
+    public readonly displaySlot: number
     public readonly register: ds.Register<R>
-    
+
     protected readonly sensor: T
-    protected _latestRead: R
-    protected _driverStore: DriverStore
+
+    private lastRead: R
 
     constructor(
-        peripheral: PeripheralConfigTypes,
-        protected readonly _routine?: BaseRoutine) {
+        public id: string,
+        peripheral: PeripheralConfig
+    ) {
         this.sensor = this.startServer()
-        this.invert = peripheral.invert || false
-        this.autostart = peripheral.autostart || false
         this.register = this.initRegister()
-        this._driverStore = DriverStore.getInstance()
+        this.name = peripheral.name || peripheral.type
+        this.reverse = peripheral.reverse || false
+        this.display = peripheral.display || false
+        this.displaySlot = peripheral.displayRow || 0
     }
 
     protected async __read() {
-        this._latestRead = await this.register.read()
-        console.log(this._latestRead);
-        return this._latestRead
+        this.lastRead = await this.register.read()
+        return this.lastRead
     }
 
     public async read() {
         return await this.__read()
     }
 
-    public async write(value: R) {
-        if (this._latestRead !== value)
-            return await this.register.write(value)
+    // public readonly writeDurationHandler =
+    //     (peripheral: DevicePeripheral, value: R) => async () => await peripheral.write(value);
+
+    public async write(value: R, options?: DurationOptions<R>) {
+        if (this.lastRead !== value) {
+            await this.register.write(value)
+        }
+        // if (options) {
+        //     setTimeout(this.writeDurationHandler(this, options.fallbackValue), options.duration)
+        // }
     }
 
-    public async handler(): Promise<ds.Handler<HandlerArgs>> {
-        return async (args: HandlerArgs) => {
-            const [meetsConditions, actions] = args
-            if (actions.setValue) {
-                const { target, value, otherwise, duration, durationUntil } = actions.setValue
-                const newValue = meetsConditions ? value : otherwise
-                const targetDriver = this._driverStore.get(target)
-                await targetDriver.write(newValue)
+    public async toDisplay() {
+        const value = await this.read()
+        return `${this.name}: ${value}`
+    }
 
-                if (duration) {
-                    await ds.delay(duration) // TODO: Improve implementation 
-                    await targetDriver.write(otherwise)
-                }
-            }
+    public reading<R>(): Observable<R> {
+        return this.register.pipe()
+    }
 
-            if (actions.sendEmail) {
-                // TODO: Implement email notification
-            }
-        }
+    public binding(): ds.ClientRegister<boolean> {
+        return this.sensor.binding();
     }
 
     protected abstract startServer(): T
@@ -81,72 +81,110 @@ export abstract class PeripheralAdapter<T extends DevicePeripheralTypes, R = any
 
 export class LightLevelAdapter extends PeripheralAdapter<ds.LightLevel, number>  {
     constructor(
-        peripheral: IPeripheralConfig<PeripheralType.LightLevel>,
-        routine?: Routines) {
-        super(peripheral, routine)
+        key: string,
+        peripheral: PeripheralConfig) {
+        super(key, peripheral)
     }
 
     public override async read(): Promise<number> {
         const value = await this.__read()
-        const newMin = this.invert ? 1 : 0;
-        const newMax = this.invert ? 0 : 1;
+        const newMin = this.reverse ? 1 : 0;
+        const newMax = this.reverse ? 0 : 1;
         return Math.map(value, 0, 1, newMin, newMax)
     }
 
     protected startServer(): ds.LightLevel {
-        return startLightLevel({ pin: ds.gpio(LightLevelPin) })
+        return new ds.LightLevel(this.name)
     }
 
     protected initRegister(): ds.Register<number> {
         return this.sensor.reading
+    }
+
+    public override async toDisplay() {
+        const value = await this.read()
+        const additionalChars = [':', ' ', '[', ']'].length
+        const width = ScreenColumns - this.name.length - additionalChars
+        return `${this.name}: [${this.charProgressBar(value, width)}]`
+    }
+
+    private charProgressBar(value: number, charWidth: number) {
+        const charsLen = Math.map(value, 0, 1, 0, charWidth) - 1
+        let bar = ''
+        for (let i = 0; i < charsLen; i++) {
+            bar += "="
+        }
+        return bar
     }
 }
 
 export class SoilMoistureAdapter extends PeripheralAdapter<ds.SoilMoisture, number>  {
     constructor(
-        peripheral: IPeripheralConfig<PeripheralType.SoilMoisture>,
-        routine?: Routines) {
-        super(peripheral, routine)
+        key: string,
+        peripheral: PeripheralConfig) {
+        super(key, peripheral)
     }
 
     protected startServer(): ds.SoilMoisture {
-        return startSoilMoisture({ pin: ds.gpio(SoilMoisturePin) })
+        return new ds.SoilMoisture(this.name)
     }
 
     protected initRegister(): ds.Register<number> {
         return this.sensor.reading
     }
+
+    public override async toDisplay() {
+        const value = await this.read()
+        const additionalChars = [':', ' ', ' ', '[', ']'].length
+        const width = ScreenColumns - this.name.length - additionalChars
+        return `${this.name}:  [${this.charProgressBar(value, width)}]`
+    }
+
+    private charProgressBar(value: number, charWidth: number) {
+        const charsLen = Math.map(value, 0, 1, 0, charWidth) - 1
+        let bar = ''
+        for (let i = 0; i < charsLen; i++) {
+            bar += "="
+        }
+        return bar
+    }
 }
 
 export class RelayAdapter extends PeripheralAdapter<ds.Relay, boolean> {
     constructor(
-        peripheral: IPeripheralConfig<PeripheralType.Relay>,
-        routine?: Routines) {
-        super(peripheral, routine)
+        key: string,
+        peripheral: PeripheralConfig) {
+        super(key, peripheral)
+    }
+
+    public override async toDisplay(): Promise<string> {
+        const enabled = await this.read()
+        return `${this.name}: ${enabled ? "On" : 'Off'}`
     }
 
     protected startServer(): ds.Relay {
-        return startRelay({ pin: ds.gpio(LampRelayPin) })
+        return new ds.Relay(this.name)
     }
+
     protected initRegister(): ds.Register<boolean> {
         return this.sensor.enabled
     }
 }
 
 export class PeripheralAdapterFactory {
-    public static create(peripheral: PeripheralConfigTypes, routine?: Routines): PeripheralAdapter<DevicePeripheralTypes> {
+    public static create(key: string, peripheral: PeripheralConfig): DevicePeripheral {
         switch (peripheral.type) {
             case PeripheralType.LightLevel:
-                return new LightLevelAdapter(peripheral, routine)
+                return new LightLevelAdapter(key, peripheral)
 
             case PeripheralType.SoilMoisture:
-                return new SoilMoistureAdapter(peripheral, routine)
+                return new SoilMoistureAdapter(key, peripheral)
 
             case PeripheralType.Relay:
-                return new RelayAdapter(peripheral, routine)
+                return new RelayAdapter(key, peripheral)
 
             default:
-                const type = (peripheral as PeripheralConfigTypes).type
+                const type = (peripheral as PeripheralConfig).type
                 throw new UnsupportedSensorServerError(type)
         }
     }

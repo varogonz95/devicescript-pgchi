@@ -1,16 +1,18 @@
-import { RoutineCondition } from "./routines"
-
 export interface PushNotificationAction {
     title: string
     message: string
+}
+
+export interface DurationOptions<R> {
+    duration: number,
+    fallbackValue: R
 }
 
 export interface SetValueAction {
     target: string
     value: number | boolean
     otherwise?: number | boolean,
-    duration?: number
-    durationUntil?: RoutineCondition
+    durationOptions?: DurationOptions<number | boolean>
 }
 
 export interface SendEmailAction {
@@ -24,9 +26,11 @@ export interface WebhookAction {
     data?: string
 }
 
-export interface Actions {
-    pushNotification: PushNotificationAction,
-    sendEmail: SendEmailAction,
-    setValue: SetValueAction,
-    webhook: WebhookAction,
-}
+
+export type SetValue = { setValue: SetValueAction }
+
+export type Actions =
+    | { pushNotification: PushNotificationAction }
+    | { sendEmail: SendEmailAction }
+    | SetValue
+    | { webhook: WebhookAction }

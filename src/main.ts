@@ -1,130 +1,110 @@
-import { Handler, delay } from "@devicescript/core";
-import { interval, map } from "@devicescript/observables";
+import { deviceIdentifier } from "@devicescript/core";
+import { catchError, collectTime, tap } from "@devicescript/observables";
+import { connectToIoTHub } from "./api/azure-iot-hub";
 import { DeviceConfig } from "./config";
-import { Seconds } from "./constants";
-import { DevicePeripheralTypes, PeripheralAdapter, PeripheralAdapterFactory, PeripheralType } from "./peripherals";
-import { ConditionType, RoutineCondition, isAllOfCondition, isAnyOfCondition, isRangeConditionType, isScalarConditionType, isScheduledRoutine } from "./routines";
-import { Actions } from "./actions";
-import { DriverStore } from "./driver-store";
+import { seconds } from "./constants";
+import { PeripheralType } from "./peripherals";
+import { initializeAdapters, publishSensorData, toReadingRecords, waitTillDevicesAreBound } from "./utils";
 
-const deviceConfig: DeviceConfig = {
+const deviceId = deviceIdentifier("self");
+
+// const ssd1306Options: SSD1306Options = {
+//     width: ScreenWidth,
+//     height: ScreenHeight,
+//     devAddr: 0x3c
+// }
+// const ssd1306 = await startCharacterScreenDisplay(
+//     new SSD1306Driver(ssd1306Options),
+//     {
+//         columns: ScreenColumns,
+//         rows: ScreenRows,
+//     }
+// )
+
+let defaultConfig: DeviceConfig = {
     peripherals: {
-        foo: { type: PeripheralType.LightLevel, invert: true },
-        bar: { type: PeripheralType.SoilMoisture },
-        baz: { type: PeripheralType.Relay },
+        light: { name: "Light", type: PeripheralType.LightLevel, display: true, reverse: true },
+        soil: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
+        lamp: { name: "Lamp", type: PeripheralType.Relay, display: true },
+        pump: { name: "Pump", type: PeripheralType.Relay, display: true },
     },
     routines: {
-        foo: {
+        light: {
             conditions: {
                 allOf: [
-                    { between: [0, 0.15] },
+                    { between: [0, 0.25] },
                 ]
             },
             actions: {
                 setValue: {
-                    target: "baz",
+                    target: "lamp",
                     value: true,
                     otherwise: false
                 }
             }
-        }
-    }
+        },
+        soil: {
+            conditions: {
+                allOf: [
+                    { between: [0, 0.1] },
+                ]
+            },
+            actions: {
+                setValue: {
+                    target: "pump",
+                    value: true,
+                    otherwise: false
+                }
+            }
+        },
+    },
 }
+const { peripherals, routines } = defaultConfig;
+const adapters = initializeAdapters(peripherals);
 
+await waitTillDevicesAreBound(adapters);
 
-const { peripherals, routines } = deviceConfig
+const altDeviceId = "py01";
+const iotHubClient = await connectToIoTHub(altDeviceId);
 
-type PeripheralAdapters = Record<string, PeripheralAdapter<DevicePeripheralTypes>>
-let adapters: PeripheralAdapters = {}
+const records = toReadingRecords(adapters);
 
-// Initialize sensor servers respectively
-for (const pKey in peripherals) {
-    const config = peripherals[pKey]
-    adapters[pKey] = PeripheralAdapterFactory.create(config, routines[pKey])
-}
+// //* Publish sensor data to topic
+const publishTopic = `devices/${altDeviceId}/messages/events/`;
 
-DriverStore.createInstance(adapters)
+collectTime(
+    records,
+    seconds(5)
+)
+    .pipe(
+        catchError((err, sensors) => {
+            console.error(err);
+            return sensors;
+        }),
+        tap(sensors => console.data({ ...sensors }))
+    )
+    .subscribe(async sensors => {
+        await publishSensorData(iotHubClient, publishTopic, sensors);
+    });
 
-function conditionsMet(conditions: RoutineCondition, value: any) {
-    if (isAllOfCondition(conditions)) {
-        return allOfConditionsMet(conditions.allOf, value);
-    }
+//* Subscribe to topic messages
+const subscribeTopic = `devices/${altDeviceId}/messages/devicebound/#`;
+const iotHubSubscription = await iotHubClient.subscribe(subscribeTopic);
 
-    if (isAnyOfCondition(conditions)) {
-        return anyOfConditionsMet(conditions.anyOf, value);
-    }
+iotHubSubscription
+    .pipe(
+        tap(message => console.debug("Message recieved: ", message.content.toString()))
+    )
+    .subscribe(message => {
+        const jsonContent = message.content.toString();
+        const payload = JSON.parse(jsonContent);
 
-    return false;
-}
+        console.log("New config recieved.");
+        console.debug("Message", jsonContent);
 
-function evaluateConditions(conditions: ConditionType[], value: any) {
-    const assertions: boolean[] = []
+        // TODO: Convert message to config obj
+        defaultConfig = { ...payload } as DeviceConfig
 
-    for (const condition of conditions) {
-        if (isScalarConditionType(condition)) {
-            if (condition.equals) {
-                assertions.push(value === condition.equals)
-            }
-            else if (condition.greaterOrEqualsTo) {
-                assertions.push(value >= condition.greaterOrEqualsTo)
-            }
-            else if (condition.greaterThan) {
-                assertions.push(value > condition.greaterThan)
-            }
-            else if (condition.lessOrEqualsTo) {
-                assertions.push(value <= condition.lessOrEqualsTo)
-            }
-            else if (condition.lessThan) {
-                assertions.push(value < condition.lessThan)
-            }
-            else if (condition.notEquals) {
-                assertions.push(value !== condition.notEquals)
-            }
-            else { }
-        }
+        // TODO: Run the new config
 
-        if (isRangeConditionType(condition)) {
-            if (condition.between) {
-                const [lower, upper] = condition.between
-                assertions.push(lower <= value && value <= upper)
-            }
-            else { }
-        }
-    }
-    return assertions
-}
-
-function allOfConditionsMet(conditions: ConditionType[], value: any) {
-    const assertions = evaluateConditions(conditions, value)
-    return assertions.every(assertion => assertion === true)
-}
-
-function anyOfConditionsMet(conditions: ConditionType[], value: any) {
-    const assertions = evaluateConditions(conditions, value)
-    return assertions.some(assertion => assertion === true)
-}
-
-interval(1 * Seconds)
-    .pipe(map(async _ => {
-        const thing: Record<string, [number, [boolean, Partial<Actions>], Handler<[boolean, Partial<Actions>]>]> = {}
-
-        for (const key in routines) {
-            const adapter = adapters[key]
-            const value = await adapter.read()
-            const { actions, conditions } = routines[key]
-            const meetsConditions = conditionsMet(conditions, value)
-
-            if (isScheduledRoutine(routines[key])) {
-                // TODO: Handle schedule
-            }
-            thing[key] = [value, [meetsConditions, actions], adapter.handler]
-        }
-
-        return thing
-    }))
-    .subscribe(async commands => {
-        for (const key in commands) {
-            const [_, args, execute] = commands[key]
-            await execute(args)
-        }
-    })
+    });

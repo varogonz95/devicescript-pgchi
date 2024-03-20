@@ -1,21 +1,19 @@
 import { PeripheralType } from "./peripherals"
-import { Routines } from "./routines"
+import { RoutineTypes } from "./routines"
 
-export interface IPeripheralConfig<T extends PeripheralType> {
-    type: T
-    invert?: boolean
-    autostart?: boolean
+export interface PeripheralConfig {
+    name: string
+    type: PeripheralType
+    display?: boolean
+    displayRow?: number
+    reverse?: boolean
 }
 
-export type PeripheralConfigTypes =
-    | IPeripheralConfig<PeripheralType.LightLevel>
-    | IPeripheralConfig<PeripheralType.SoilMoisture>
-    | IPeripheralConfig<PeripheralType.Relay>
-
-export type PeripheralsConfig = Record<string, PeripheralConfigTypes>
-export type RoutinesConfig = Record<string, Routines>
+export type PeripheralsConfig = Record<string, PeripheralConfig>
+export type RoutinesConfig = Record<string, RoutineTypes>
 
 export interface DeviceConfig {
+    description?: string
     peripherals: PeripheralsConfig
     routines?: RoutinesConfig
 }

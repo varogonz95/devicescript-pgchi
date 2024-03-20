@@ -1,8 +1,8 @@
 {
     "$schema": "https://raw.githubusercontent.com/microsoft/devicescript-esp32/main/boards/esp32deviceconfig.schema.json",
-    "devName": "esp32_wroom_c",
+    "devName": "esp32_wroom_devkit_c",
     "productId": "0x34cbc018",
-    "$description": "There are currently issues with serial chip on these, best avoid. ESP32-DevKitC development board. This will also work with DOIT DevkitV1, NodeMCU ESP32, ... (search for 'esp32 devkit'). Some of these boards do not have the LED.",
+    "$description": "ESP-WROOM-32 DevKit w/ Type USB C",
     "archId": "esp32",
     "url": "https://docs.espressif.com/projects/esp-idf/en/latest/esp32/hw-reference/esp32/get-started-devkitc.html",
     "$services": [
@@ -10,6 +10,21 @@
             "name": "buttonIO0",
             "pin": 0,
             "service": "button"
+        },
+        {
+            "name": "lampRelay",
+            "pin": 27,
+            "service": "relay"
+        },
+        {
+            "name": "lightLevel",
+            "pin": 32,
+            "service": "analog:lightLevel"
+        },
+        {
+            "name": "soilMoisture",
+            "pin": 33,
+            "service": "analog:soilMoisture"
         }
     ],
     "led": {
@@ -26,13 +41,14 @@
         "P23": 23,
         "P25": 25,
         "P26": 26,
-        "P27": 27,
-        "P32": 32,
-        "P33": 33,
         "P34": 34,
         "P35": 35,
         "P4": 4,
         "VN": 39,
         "VP": 36
+    },
+    "i2c": {
+        "pinSCL": "P22",
+        "pinSDA": "P21"
     }
 }
