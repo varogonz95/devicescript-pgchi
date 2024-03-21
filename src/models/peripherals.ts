@@ -1,9 +1,8 @@
 import * as ds from "@devicescript/core";
-import { PeripheralConfig } from "./config";
-import { ScreenColumns } from "./constants";
-import { UnsupportedSensorServerError } from "./errors";
-import { DurationOptions } from "./actions";
 import { Observable } from "@devicescript/observables";
+import { DurationOptions } from "./actions";
+import { PeripheralConfig } from "./config";
+import { ScreenColumns } from "../constants";
 
 export enum PeripheralType {
     LightLevel = 'lightLevel',
@@ -185,7 +184,7 @@ export class PeripheralAdapterFactory {
 
             default:
                 const type = (peripheral as PeripheralConfig).type
-                throw new UnsupportedSensorServerError(type)
+                throw new Error(type)
         }
     }
 }

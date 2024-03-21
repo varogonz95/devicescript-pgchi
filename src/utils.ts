@@ -1,9 +1,9 @@
 import { delay } from "@devicescript/core";
 import { MQTTClient } from "@devicescript/net";
 import { Observable } from "@devicescript/observables";
-import { PeripheralsConfig } from "./config";
+import { PeripheralsConfig } from "./models/config";
 import { seconds } from "./constants";
-import { PeripheralAdapterFactory, PeripheralRecords } from "./peripherals";
+import { PeripheralAdapterFactory, PeripheralRecords } from "./models/peripherals";
 
 
 export function initializeAdapters(peripherals: PeripheralsConfig): PeripheralRecords {
