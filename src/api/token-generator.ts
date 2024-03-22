@@ -1,5 +1,6 @@
 import { fetch } from "@devicescript/net"
-import { readSetting } from "@devicescript/settings"
+import { Settings } from "../services/singleton-setting"
+import { JsonContentTypeHeader } from "./headers";
 
 export interface TokenResponse {
     token: string,
@@ -7,22 +8,27 @@ export interface TokenResponse {
 }
 
 export async function getToken(uri: string, key: string, policyName: string = ""): Promise<TokenResponse> {
-    const azureFuncApiKey = await readSetting("AZURE_FNC_KEY")
-    const tokenApiUrl = await readSetting("SASTOKENAPI")
-    const requestBody = JSON.stringify({ Key: key, Uri: uri, PolicyName: policyName })
-
+    const tokenApiUrl = await Settings.readSetting("TOKEN_API_URL");
+    const funcKey = await Settings.readSetting("TOKEN_API_KEY");
+    
+    const requestBody = JSON.stringify({ Key: key, Uri: uri, PolicyName: policyName });
     console.debug("SAS Token API request", requestBody)
 
-    const response = await fetch(`${tokenApiUrl}?apikey=${azureFuncApiKey}`, {
+    const response = await fetch(tokenApiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
+        headers: { ...JsonContentTypeHeader, 'x-functions-key': funcKey },
         body: requestBody
-    })
-    
-    console.debug("SAS Token API response", await response.text());
-    
-    const tokenData = <TokenResponse>(await response.json())
-    await response.close()
+    });
 
-    return tokenData
+    if (!response.ok) {
+        throw new Error("An error occured retrieving the token. Status: " + response.statusText)
+    }
+
+    const textResponse = await response.text();
+    await response.close();
+    console.debug("SAS Token API response", textResponse);
+
+    const tokenData = <TokenResponse>(JSON.parse(textResponse));
+    
+    return tokenData;
 }
