@@ -23,75 +23,74 @@ await registerDevice(deviceId)
 //     }
 // )
 
-// let defaultConfig: DeviceConfig = {
-//     peripherals: {
-//         light: { name: "Light", type: PeripheralType.LightLevel, display: true, reverse: true },
-//         soil: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
-//         lamp: { name: "Lamp", type: PeripheralType.Relay, display: true },
-//         pump: { name: "Pump", type: PeripheralType.Relay, display: true },
-//     },
-//     routines: {
-//         light: {
-//             conditions: {
-//                 allOf: [
-//                     { between: [0, 0.25] },
-//                 ]
-//             },
-//             actions: {
-//                 setValue: {
-//                     target: "lamp",
-//                     value: true,
-//                     otherwise: false
-//                 }
-//             }
-//         },
-//         soil: {
-//             conditions: {
-//                 allOf: [
-//                     { between: [0, 0.1] },
-//                 ]
-//             },
-//             actions: {
-//                 setValue: {
-//                     target: "pump",
-//                     value: true,
-//                     otherwise: false
-//                 }
-//             }
-//         },
-//     },
-// }
-// const { peripherals, routines } = defaultConfig;
-// const adapters = initializeAdapters(peripherals);
+let defaultConfig: DeviceConfig = {
+    peripherals: {
+        light: { name: "Light", type: PeripheralType.LightLevel, display: true, reverse: true },
+        soil: { name: "Soil", type: PeripheralType.SoilMoisture, display: true, },
+        lamp: { name: "Lamp", type: PeripheralType.Relay, display: true },
+        pump: { name: "Pump", type: PeripheralType.Relay, display: true },
+    },
+    routines: {
+        light: {
+            conditions: {
+                allOf: [
+                    { between: [0, 0.25] },
+                ]
+            },
+            actions: {
+                setValue: {
+                    target: "lamp",
+                    value: true,
+                    otherwise: false
+                }
+            }
+        },
+        soil: {
+            conditions: {
+                allOf: [
+                    { between: [0, 0.1] },
+                ]
+            },
+            actions: {
+                setValue: {
+                    target: "pump",
+                    value: true,
+                    otherwise: false
+                }
+            }
+        },
+    },
+}
+const { peripherals, routines } = defaultConfig;
+const adapters = initializeAdapters(peripherals);
 
-// await waitTillDevicesAreBound(adapters);
+await waitTillDevicesAreBound(adapters);
 
-// const altDeviceId = "py01";
-// const iotHubClient = await connectToIoTHub(altDeviceId);
+const iotHubClient = await connectToIoTHub(deviceId);
 
-// const records = toReadingRecords(adapters);
+const records = toReadingRecords(adapters);
 
-// // //* Publish sensor data to topic
-// const publishTopic = `devices/${altDeviceId}/messages/events/`;
+// //* Publish sensor data to topic
+const publishTopic = `devices/${deviceId}/messages/events/`;
 
-// collectTime(
-//     records,
-//     seconds(5)
-// )
-//     .pipe(
-//         catchError((err, sensors) => {
-//             console.error(err);
-//             return sensors;
-//         }),
-//         tap(sensors => console.data({ ...sensors }))
-//     )
-//     .subscribe(async sensors => {
-//         await publishSensorData(iotHubClient, publishTopic, sensors);
-//         await RoutineOrchestrator.runAll(adapters, routines)
-//     });
+collectTime(
+    records,
+    seconds(5)
+)
+    .pipe(
+        catchError((err, sensors) => {
+            console.error(err);
+            return sensors;
+        }),
+        tap(sensors => console.data({ ...sensors }))
+    )
+    .subscribe(async sensors => {
+        await publishSensorData(iotHubClient, publishTopic, sensors);
+        // await RoutineOrchestrator.runAll(adapters, routines)
+    });
 
 // //* Subscribe to topic messages
-// const subscribeTopic = `devices/${altDeviceId}/messages/devicebound/#`;
+// const subscribeTopic = `devices/${deviceId}/messages/devicebound/#`;
 // const iotHubSubscription = await iotHubClient.subscribe(subscribeTopic);
 
 // iotHubSubscription

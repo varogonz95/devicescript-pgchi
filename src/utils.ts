@@ -33,6 +33,8 @@ export async function publishSensorData<T>(client: MQTTClient, topic: string, se
 
 export async function waitTillDevicesAreBound(peripherals: PeripheralRecords) {
     while (true) {
+        console.log("Waiting for sensors...");
+
         const promises = Object.keys(peripherals)
             .map(async (key) => await peripherals[key].binding().read());
 
@@ -41,10 +43,10 @@ export async function waitTillDevicesAreBound(peripherals: PeripheralRecords) {
             boundDevices.push(await promises[i]);
         }
 
-        if (!boundDevices.every(isBound => isBound))
+        if (boundDevices.every(isBound => isBound)) {
+            console.log("All sensors bound!");
             break;
-
-        console.log("Waiting for sensors...");
+        }
 
         await delay(seconds(1));
     }
