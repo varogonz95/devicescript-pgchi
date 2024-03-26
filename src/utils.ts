@@ -2,9 +2,11 @@ import { delay } from "@devicescript/core";
 import { MQTTClient } from "@devicescript/net";
 import { Observable } from "@devicescript/observables";
 import { PeripheralsConfig } from "./models/config";
-import { seconds } from "./constants";
 import { PeripheralAdapterFactory, PeripheralRecords } from "./models/peripherals";
 
+export const seconds = (secs: number) => secs * 1000
+export const minutes = (mins: number) => mins * seconds(60)
+export const hours = (hrs: number) => hrs * minutes(60)
 
 export function initializeAdapters(peripherals: PeripheralsConfig): PeripheralRecords {
     let adapters: PeripheralRecords = {}
