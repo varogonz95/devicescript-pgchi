@@ -4,7 +4,7 @@ import { JsonContentTypeHeader } from "./headers";
 
 export interface TokenResponse {
     token: string,
-    expiry: number
+    expiry: number,
 }
 
 export async function getToken(uri: string, key: string, policyName: string = ""): Promise<TokenResponse> {
@@ -28,7 +28,5 @@ export async function getToken(uri: string, key: string, policyName: string = ""
     await response.close();
     console.debug("SAS Token API response", textResponse);
 
-    const tokenData = <TokenResponse>(JSON.parse(textResponse));
-    
-    return tokenData;
+    return JSON.parse(textResponse) as TokenResponse;
 }

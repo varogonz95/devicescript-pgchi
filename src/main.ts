@@ -1,15 +1,12 @@
 import { deviceIdentifier } from "@devicescript/core";
 import { catchError, collectTime, tap } from "@devicescript/observables";
-import { connectToIoTHub } from "./api/azure-iot-hub";
+import { connectToIotHub } from "./api/azure-iot-hub";
 import { registerDevice } from "./api/register-device";
-import { seconds } from "./constants";
 import { DeviceConfig } from "./models/config";
 import { PeripheralType } from "./models/peripherals";
 import { RoutineOrchestrator } from "./routine-orchestrator";
-import { initializeAdapters, publishSensorData, toReadingRecords, waitTillDevicesAreBound } from "./utils";
+import { initializeAdapters, publishSensorData, seconds, toReadingRecords, waitTillDevicesAreBound } from "./utils";
 
-const deviceId = deviceIdentifier("self");
-await registerDevice(deviceId)
 // const ssd1306Options: SSD1306Options = {
 //     width: ScreenWidth,
 //     height: ScreenHeight,
@@ -66,7 +63,14 @@ const adapters = initializeAdapters(peripherals);
 
 await waitTillDevicesAreBound(adapters);
 
-const iotHubClient = await connectToIoTHub(deviceId);
+setInterval(async () => {
+    await RoutineOrchestrator.runAll(adapters, routines)
+}, seconds(1));
+
+const deviceId = deviceIdentifier("self");
+const { authentication } = await registerDevice(deviceId)
+const { primaryKey } = authentication.symmetricKey
+const iotHubClient = await connectToIotHub(deviceId, primaryKey);
 
 const records = toReadingRecords(adapters);
 
@@ -86,7 +90,6 @@ collectTime(
     )
     .subscribe(async sensors => {
         await publishSensorData(iotHubClient, publishTopic, sensors);
-        // await RoutineOrchestrator.runAll(adapters, routines)
     });
 
 // //* Subscribe to topic messages
